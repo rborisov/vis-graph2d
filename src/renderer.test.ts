@@ -7,6 +7,7 @@ import type { Graph2dHandle } from './renderer';
 import { stubLayout, stubCreateEl } from './test-dom';
 import type { MomentLike } from './x-scale';
 import type { NormalizedChart } from './types';
+import { resolveData } from './data-source';
 
 // stubCreateEl: not in the brief's given test file. renderer.ts and main.ts
 // call Obsidian's `el.createEl(...)`, which has no runtime implementation
@@ -248,5 +249,21 @@ describe('axis label sequences (via TimeStep, layout-independent)', () => {
   it('does not force UTC on the time axis', () => {
     const chart = normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1 }'));
     expect(chart.visOptions).not.toHaveProperty('moment');
+  });
+});
+
+describe('file-backed charts', () => {
+  it('renders a chart whose data came from a CSV file', async () => {
+    const el = createHost();
+    const reader = {
+      read: async (path: string) =>
+        path === 'charts/series.csv' ? 'x,y,group\n1,10,a\n2,25,a\n3,18,a' : null,
+    };
+    const block = await resolveData(
+      parseBlock('options: { xAxis: numeric }\ndata: charts/series.csv\ngroups:\n  - id: a'),
+      reader
+    );
+    renderGraph2d(el, normalize(block));
+    expect(el.querySelector('.vis-panel')).not.toBeNull();
   });
 });

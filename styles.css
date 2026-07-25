@@ -12,3 +12,9 @@
   font-size: var(--font-smaller);
   white-space: pre-wrap;
 }
+
+.graph2d-loading {
+  padding: 0.75em 1em;
+  color: var(--text-muted);
+  font-size: var(--font-smaller);
+}

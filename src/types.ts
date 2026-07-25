@@ -96,3 +96,9 @@ export interface NormalizedChart {
   /** Explicit container height from block options, if the author set one. */
   height?: string;
 }
+
+/** Minimal vault surface data-source.ts needs, so it stays unit-testable. */
+export interface DataReader {
+  /** Returns the file's text, or null when it does not exist. */
+  read(path: string): Promise<string | null>;
+}
