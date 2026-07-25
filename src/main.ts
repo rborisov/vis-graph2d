@@ -6,6 +6,7 @@ import type { Graph2dHandle } from './renderer';
 import { collectDataPaths, resolveData } from './data-source';
 import type { DataReader, RawBlock } from './types';
 import { DEFAULT_SETTINGS, Graph2dSettingTab, Graph2dSettings, toBlockDefaults } from './settings';
+import { rasterize } from './rasterize';
 
 /**
  * All mutable state for one rendered code block, across its initial load
@@ -24,6 +25,7 @@ import { DEFAULT_SETTINGS, Graph2dSettingTab, Graph2dSettings, toBlockDefaults }
  */
 interface BlockState {
   readonly source: string;
+  readonly sourcePath: string;
   readonly el: HTMLElement;
   paths: string[];
   graph: Graph2dHandle | null;
@@ -60,6 +62,7 @@ export default class VisGraph2dPlugin extends Plugin {
 
       const state: BlockState = {
         source,
+        sourcePath: ctx.sourcePath,
         el,
         paths: [],
         graph: null,
@@ -118,8 +121,28 @@ export default class VisGraph2dPlugin extends Plugin {
       // that already ran and will never run again.
       if (state.torndown) return;
 
+      // pubobs renders each note offscreen inside a `[data-pubobs-render]`
+      // wrapper before syncing it. `closest` isn't defined on the minimal
+      // fake host element main.test.ts's lifecycle tests use in place of a
+      // real DOM node (see fakeEl() there), so this is guarded rather than
+      // called unconditionally -- on any real Obsidian element `closest`
+      // always exists, so this only ever affects that test harness.
+      const isPubobsExport =
+        typeof state.el.closest === 'function' &&
+        state.el.closest('[data-pubobs-render]') !== null;
+
       state.el.empty();
-      state.graph = renderGraph2d(state.el, chart);
+      state.graph = renderGraph2d(state.el, chart, isPubobsExport);
+
+      // A rasterized chart is a static image with no live graph to
+      // refresh, so it never needs a watcher -- skip registering one
+      // entirely rather than registering it and immediately tearing it
+      // down.
+      if (isPubobsExport) {
+        await rasterize(state.el, state.graph, this.app, state.sourcePath, state.source);
+        return;
+      }
+
       state.paths = paths;
 
       if (paths.length > 0) {

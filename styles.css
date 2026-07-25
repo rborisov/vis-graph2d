@@ -18,3 +18,20 @@
   color: var(--text-muted);
   font-size: var(--font-smaller);
 }
+
+.g2d-capture-no-transitions,
+.g2d-capture-no-transitions * {
+  transition: none !important;
+  animation: none !important;
+}
+
+.g2d-export-img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* pubobs renders offscreen at a fixed narrow width; charts need more room
+   so axis labels are not cramped. The exported <img> scales back down. */
+.g2d-export-width {
+  width: 1200px;
+}

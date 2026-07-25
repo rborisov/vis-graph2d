@@ -4,7 +4,7 @@ import { parseBlock } from './parser';
 import { normalize } from './normalizer';
 import { renderGraph2d } from './renderer';
 import type { Graph2dHandle } from './renderer';
-import { stubLayout, stubCreateEl } from './test-dom';
+import { stubLayout, stubCreateEl, stubClassMethods } from './test-dom';
 import type { MomentLike } from './x-scale';
 import type { NormalizedChart } from './types';
 import { resolveData } from './data-source';
@@ -15,6 +15,7 @@ import { resolveData } from './data-source';
 beforeAll(() => {
   stubCreateEl();
   stubLayout();
+  stubClassMethods();
 });
 
 /**
@@ -98,6 +99,74 @@ describe('renderGraph2d', () => {
     ];
     expect(() => renderGraph2d(el, chart)).toThrow();
     expect(el.querySelector('.graph2d-plugin')).toBeNull();
+  });
+});
+
+/**
+ * Task 10's export path: `renderGraph2d(el, chart, true)` is how main.ts
+ * renders a chart destined for rasterize() (see rasterize.test.ts and
+ * main.test.ts for the rest of that path -- rasterize() itself needs a real
+ * canvas and cannot run under happy-dom). These tests are the regression
+ * check that matters most here: the export path must only ever change
+ * behavior when `autoHeight` is explicitly true, never for a normal render.
+ */
+describe('renderGraph2d export path (autoHeight)', () => {
+  function svgHeight(el: HTMLElement): string | undefined {
+    return el.querySelector<SVGElement>('.vis-line-graph svg')?.style.height;
+  }
+
+  it('adds the export-width class when autoHeight is true', () => {
+    const el = createHost();
+    const chart = normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1 }'));
+    renderGraph2d(el, chart, true);
+    const container = el.querySelector('.graph2d-plugin');
+    expect(container?.classList.contains('g2d-export-width')).toBe(true);
+  });
+
+  it('does not add the export-width class on a normal render', () => {
+    const el = render('items:\n  - { x: "2026-01-01", y: 10 }');
+    const container = el.querySelector('.graph2d-plugin');
+    expect(container?.classList.contains('g2d-export-width')).toBe(false);
+  });
+
+  it('does not apply a fixed container height on the export path, even when the block sets one', () => {
+    const el = createHost();
+    const chart = normalize(
+      parseBlock('options: { height: 900px }\nitems:\n  - { x: "2026-01-01", y: 1 }')
+    );
+    renderGraph2d(el, chart, true);
+    const container = el.querySelector<HTMLElement>('.graph2d-plugin');
+    expect(container?.style.height).toBe('');
+  });
+
+  it('still applies a fixed container height on a normal render with an explicit height', () => {
+    const el = createHost();
+    const chart = normalize(
+      parseBlock('options: { height: 900px }\nitems:\n  - { x: "2026-01-01", y: 1 }')
+    );
+    renderGraph2d(el, chart, false);
+    const container = el.querySelector<HTMLElement>('.graph2d-plugin');
+    expect(container?.style.height).toBe('900px');
+  });
+
+  it('draws at the chart\'s configured height on the export path, not the 400px default', () => {
+    // Regression test for the known defect this task fixes: previously the
+    // export path always reset graphHeight to the 400px default and
+    // silently discarded an explicit chart.height, so a taller chart got
+    // cropped in the rasterized image instead of actually growing to fit.
+    const el = createHost();
+    const chart = normalize(
+      parseBlock('options: { height: 900px }\nitems:\n  - { x: "2026-01-01", y: 1 }')
+    );
+    renderGraph2d(el, chart, true);
+    expect(svgHeight(el)).toBe('900px');
+  });
+
+  it('draws at the 400px default on the export path when no height is configured', () => {
+    const el = createHost();
+    const chart = normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1 }'));
+    renderGraph2d(el, chart, true);
+    expect(svgHeight(el)).toBe('400px');
   });
 });
 

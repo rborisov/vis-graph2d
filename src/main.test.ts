@@ -218,3 +218,51 @@ describe('VisGraph2dPlugin lifecycle', () => {
     expect(handles[2]!.destroy).not.toHaveBeenCalled(); // still current
   });
 });
+
+/**
+ * Task 10's export path: main.ts routes to rasterize() instead of
+ * registering a watcher whenever the code block is rendered inside a
+ * pubobs `[data-pubobs-render]` wrapper. `rasterize` itself is not mocked
+ * here (its actual capture is covered manually -- see task-10-report.md --
+ * since html-to-image needs a real canvas that happy-dom cannot provide).
+ * `fakeExportEl` deliberately gives it just enough surface to reach its own
+ * try/catch (a `.graph2d-plugin` it will not find), so it fails fast,
+ * catches the failure itself, and returns normally -- exactly the "never
+ * let a rasterize failure break the note" contract rasterize.ts documents.
+ * That is enough to prove main.ts's own routing and watcher-skipping
+ * without needing a real canvas.
+ */
+function fakeExportEl(): HTMLElement {
+  return {
+    empty: () => {},
+    createEl: () => ({}) as HTMLElement,
+    querySelector: () => null,
+    closest: (selector: string) => (selector === '[data-pubobs-render]' ? ({} as Element) : null),
+  } as unknown as HTMLElement;
+}
+
+describe('VisGraph2dPlugin pubobs export routing', () => {
+  it('routes to rasterize and registers no watcher inside a [data-pubobs-render] container', async () => {
+    const vault = fakeVault('x,y\n1,10');
+    const handler = await loadPlugin(vault);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await handler('data: a.csv', fakeExportEl(), fakeCtx('note.md'));
+    } finally {
+      errorSpy.mockRestore();
+    }
+
+    // renderGraph2d was still called (with autoHeight=true, the third arg)
+    // -- the export path renders the chart before handing it to rasterize.
+    expect(renderGraph2dMock).toHaveBeenCalledTimes(1);
+    expect(renderGraph2dMock.mock.calls[0]?.[2]).toBe(true);
+
+    // No watcher was registered: a save of the referenced data file must
+    // not trigger a re-render of a block that is now a static image.
+    vault.emitModify('a.csv');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(renderGraph2dMock).toHaveBeenCalledTimes(1);
+  });
+});

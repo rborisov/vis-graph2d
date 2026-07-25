@@ -17,13 +17,33 @@ export function renderGraph2d(
   const container = el.createEl('div');
   container.className = 'graph2d-plugin';
 
-  // A rasterized PNG has no scrollbar, so the export path ignores any
-  // requested height and grows to fit the whole chart instead.
+  // A rasterized PNG has no scrollbar, so the export path skips the fixed
+  // CSS height entirely and lets the container grow to whatever height the
+  // chart actually draws at (see graphHeight below, which is what actually
+  // governs that drawn height and is deliberately NOT reset for the export
+  // path).
   const fixedHeight = autoHeight ? undefined : chart.height;
   if (fixedHeight !== undefined) container.style.height = fixedHeight;
 
+  // pubobs renders offscreen at a fixed narrow width; charts need more room
+  // so axis labels are not cramped. The exported <img> scales back down
+  // (see .g2d-export-width in styles.css).
+  if (autoHeight) container.addClass('g2d-export-width');
+
   const visOptions: Record<string, unknown> = {
-    graphHeight: fixedHeight ?? DEFAULT_GRAPH_HEIGHT,
+    // Always honors the chart's own configured (or default) drawing
+    // height, on both paths. This used to read `fixedHeight ??
+    // DEFAULT_GRAPH_HEIGHT`, which reset the chart's actual drawn height
+    // back down to the 400px default whenever autoHeight was true -- even
+    // if the author had configured a taller chart.height. That defeated
+    // the "grows to fit the whole chart" comment above: the export always
+    // drew (and therefore captured) at 400px regardless of the chart's
+    // real content, and since a static PNG has no scrollbar to reveal the
+    // rest, anything past that height was silently cropped in the
+    // exported image. Reading chart.height directly here means the export
+    // always draws at the same height the interactive widget uses for
+    // this chart -- never less.
+    graphHeight: chart.height ?? DEFAULT_GRAPH_HEIGHT,
     // The export path captures once and throws the live chart away, so
     // there is nothing to resize into.
     autoResize: !autoHeight,

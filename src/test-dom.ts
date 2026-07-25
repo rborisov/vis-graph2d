@@ -96,3 +96,27 @@ export function stubEmpty(): void {
     },
   });
 }
+
+/**
+ * NOT part of the task brief's given test-dom.ts contents. Ported for
+ * Task 10: `renderer.ts` (the `g2d-export-width` class) and `rasterize.ts`
+ * (the capture-no-transitions class) both call Obsidian's `addClass`/
+ * `removeClass` DOM extensions, which -- like `createEl`/`empty` above --
+ * are only real at runtime inside actual Obsidian, not under happy-dom.
+ * Thin wrappers over the standard `classList` API, which happy-dom does
+ * implement natively.
+ */
+export function stubClassMethods(): void {
+  Object.defineProperty(window.HTMLElement.prototype, 'addClass', {
+    configurable: true,
+    value: function addClass(this: HTMLElement, ...classes: string[]): void {
+      for (const cls of classes) this.classList.add(cls);
+    },
+  });
+  Object.defineProperty(window.HTMLElement.prototype, 'removeClass', {
+    configurable: true,
+    value: function removeClass(this: HTMLElement, ...classes: string[]): void {
+      for (const cls of classes) this.classList.remove(cls);
+    },
+  });
+}
