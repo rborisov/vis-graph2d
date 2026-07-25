@@ -51,12 +51,42 @@ describe('renderGraph2d', () => {
     expect(el.querySelector('.vis-panel')).not.toBeNull();
   });
 
-  it('applies an explicit height to the container', () => {
+  // CONVERTED: this previously asserted the container was pinned to the
+  // configured height. That was the bug -- `height` sizes the PLOT AREA via
+  // graphHeight, and vis draws the x-axis in a strip BELOW it, so pinning the
+  // container to the same value left the axis laid out past the container's
+  // bottom edge and invisible on every chart. The height must reach vis as
+  // graphHeight, and the container must stay unconstrained so the axis fits.
+  it('sends an explicit height to the plot area, not the container', () => {
     const el = render(
       'options: { height: 250px }\nitems:\n  - { x: "2026-01-01", y: 1 }'
     );
     const container = el.querySelector<HTMLElement>('.graph2d-plugin');
-    expect(container?.style.height).toBe('250px');
+    expect(container?.style.height).toBe('');
+  });
+
+  it('never constrains the container height, so the x-axis always has room', () => {
+    // Guards the regression directly: any CSS height on the container can
+    // clip the axis strip vis draws below the plot area.
+    for (const source of [
+      'items:\n  - { x: "2026-01-01", y: 1 }',
+      'options: { height: 250px }\nitems:\n  - { x: "2026-01-01", y: 1 }',
+      'options: { xAxis: numeric }\nitems:\n  - { x: 1, y: 1 }\n  - { x: 9, y: 2 }',
+    ]) {
+      const container = render(source).querySelector<HTMLElement>('.graph2d-plugin');
+      expect(container?.style.height, source).toBe('');
+      expect(container?.style.maxHeight, source).toBe('');
+    }
+  });
+
+  it('passes the configured height through as graphHeight', () => {
+    const chart = normalize(parseBlock('options: { height: 250px }\nitems:\n  - { x: "2026-01-01", y: 1 }'));
+    expect(chart.height).toBe('250px');
+    // graphHeight is what actually sizes the drawn plot area.
+    const el = createHost();
+    const graph = renderGraph2d(el, chart);
+    expect(el.querySelector('.vis-panel')).not.toBeNull();
+    graph.destroy();
   });
 
   it('renders a bar chart without throwing', () => {
@@ -153,14 +183,18 @@ describe('renderGraph2d export path (autoHeight)', () => {
     expect(container?.style.height).toBe('');
   });
 
-  it('still applies a fixed container height on a normal render with an explicit height', () => {
+  // CONVERTED: previously asserted the normal path pins the container to the
+  // configured height, which is exactly what hid the x-axis. Neither path
+  // constrains the container now -- `height` reaches vis as graphHeight and
+  // sizes the plot area, and vis adds its axis strip below that.
+  it('leaves the container unconstrained on the normal path too', () => {
     const el = createHost();
     const chart = normalize(
       parseBlock('options: { height: 900px }\nitems:\n  - { x: "2026-01-01", y: 1 }')
     );
     renderGraph2d(el, chart, false);
     const container = el.querySelector<HTMLElement>('.graph2d-plugin');
-    expect(container?.style.height).toBe('900px');
+    expect(container?.style.height).toBe('');
   });
 
   it('draws at the chart\'s configured height on the export path, not the 400px default', () => {

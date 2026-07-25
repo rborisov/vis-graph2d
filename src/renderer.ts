@@ -17,16 +17,13 @@ export function renderGraph2d(
   const container = el.createEl('div');
   container.className = 'graph2d-plugin';
 
-  // exportMode means this render is destined for rasterize(): no fixed CSS
-  // container height (a rasterized PNG has no scrollbar, so there is
-  // nothing for a fixed height to protect against overflowing), plus the
-  // wider .g2d-export-width layout below. Nothing here "auto"-grows the
-  // container -- with no CSS height set, the container simply sizes to
-  // whatever height its content draws at, and that drawn height is
-  // governed entirely by graphHeight below (deliberately NOT reset for
-  // export mode).
-  const fixedHeight = exportMode ? undefined : chart.height;
-  if (fixedHeight !== undefined) container.style.height = fixedHeight;
+  // The container is deliberately NOT given a CSS height. `chart.height`
+  // drives graphHeight below, which sizes the PLOT AREA only; vis then sizes
+  // its own root to top + plot + bottom + borders, where "bottom" is the
+  // x-axis strip. Pinning the container to the same value double-counted it:
+  // the plot alone filled the container, so the axis was laid out past its
+  // bottom edge and disappeared on every chart. Letting the container size to
+  // its content means the axis always has room.
 
   // pubobs renders offscreen at a fixed narrow width; charts need more room
   // so axis labels are not cramped. The exported <img> scales back down
@@ -34,18 +31,10 @@ export function renderGraph2d(
   if (exportMode) container.addClass('g2d-export-width');
 
   const visOptions: Record<string, unknown> = {
-    // Always honors the chart's own configured (or default) drawing
-    // height, on both paths. This used to read `fixedHeight ??
-    // DEFAULT_GRAPH_HEIGHT`, which reset the chart's actual drawn height
-    // back down to the 400px default whenever exportMode was true -- even
-    // if the author had configured a taller chart.height, since
-    // fixedHeight is always undefined in export mode (see above). The
-    // export silently ignored the author's configured height and always
-    // drew at the 400px default, regardless of what the chart was actually
-    // configured to draw at. Reading chart.height directly here means the
-    // export always draws at the same height the interactive widget uses
-    // for this chart -- the 400px default only applies when that's what
-    // the author actually configured (or left unset).
+    // `height` sizes the PLOT AREA, not the whole widget: vis draws the
+    // x-axis in a strip below it, so the rendered widget is this tall plus
+    // roughly 30px of axis. Identical on both paths, so an exported PNG
+    // matches the interactive chart.
     graphHeight: chart.height ?? DEFAULT_GRAPH_HEIGHT,
     // The export path captures once and throws the live chart away, so
     // there is nothing to resize into.

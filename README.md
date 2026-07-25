@@ -63,7 +63,7 @@ without the plugin knowing about them.
 | Option | Type | Description |
 | --- | --- | --- |
 | `xAxis` | `time \| numeric \| category` | X-axis interpretation. Default `time`. |
-| `height` | CSS length, e.g. `"400px"` | Fixed height of the chart container. |
+| `height` | CSS length, e.g. `"400px"` | Height of the **plotting area**. The rendered widget is this tall plus the x-axis strip drawn beneath it (roughly 30px). |
 | `legend` | `boolean \| object` | Show a legend; see `docs/examples/axes-and-legend.md` for positioning. |
 | `stack` | `boolean` | Stack bar groups at each `x` instead of overlapping them. |
 | `sort` | `boolean` | Sort items by `x` before drawing. See `docs/examples/chart-types.md` for a large-series example. |
@@ -207,6 +207,7 @@ suite (`src/examples.test.ts`) — a broken example fails the build.
 
 | Version | Notes |
 | --- | --- |
+| 0.1.2 | Fixed the x-axis being invisible on every chart: the container was pinned to the same height as the plot area, leaving no room for the axis strip below it. `height` now documents as the plotting-area height. |
 | 0.1.1 | `start`/`end`/`min`/`max`/`zoomMin`/`zoomMax` now work on numeric and category axes; data-file errors name the file; stricter validation of groups and items; unified error wording. |
 | 0.1.0 | Initial release: line/bar/points charts, time/numeric/category axes, inline/columnar/external data, full styling passthrough, PNG export. |
 

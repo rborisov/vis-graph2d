@@ -81,7 +81,9 @@ export class Graph2dSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Default chart height')
-      .setDesc('Any CSS length, for example 400px or 50vh.')
+      .setDesc(
+        'Height of the plotting area, for example 400px or 50vh. The chart also draws an axis beneath it.'
+      )
       .addText((text) =>
         text
           // The same rule reads "400px" as prose and asks for "400Px". It is

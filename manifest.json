@@ -1,7 +1,7 @@
 {
 	"id": "vis-graph2d",
 	"name": "Graph2d (vis-graph2d)",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"minAppVersion": "1.10.0",
 	"description": "Render interactive 2D charts in notes. Line, bar, and scatter graphs with YAML or JSON authoring, time/numeric/category axes, and full vis Graph2d styling.",
 	"author": "rborisov",
