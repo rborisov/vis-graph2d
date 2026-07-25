@@ -61,7 +61,13 @@ export class Graph2dSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      // obsidianmd/ui/sentence-case wants "X-axis" and "X values": its brand
+      // list contains the bare letter "X" (the platform) and it capitalises a
+      // standalone x. Here x is the literal option and field name authors
+      // write (`xAxis:`, `x:`), so lowercase is correct.
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setName('Default x-axis mode')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc('How x values are interpreted when a block does not say.')
       .addDropdown((dropdown) =>
         dropdown
@@ -78,6 +84,9 @@ export class Graph2dSettingTab extends PluginSettingTab {
       .setDesc('Any CSS length, for example 400px or 50vh.')
       .addText((text) =>
         text
+          // The same rule reads "400px" as prose and asks for "400Px". It is
+          // a CSS length, not a sentence.
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder('400px')
           .setValue(this.host.settings.defaultHeight)
           .onChange(async (value) => {
