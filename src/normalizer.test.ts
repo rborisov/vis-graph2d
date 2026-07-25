@@ -157,4 +157,39 @@ describe('normalize', () => {
       chartFrom('options: { xAxis: numeric }\nitems:\n  - { x: "abc", y: 1 }')
     ).toThrow('Item 0 has an invalid "x" value');
   });
+
+  // The numeric scale derives its step and anchor from the full data range, so
+  // it must see columnar x values as well as inline ones. Feeding it only
+  // `block.items` mis-scales the chart silently — no error, just wrong axis.
+  it('builds the numeric scale from inline and columnar x values together', () => {
+    const chart = chartFrom(
+      'options: { xAxis: numeric }\n' +
+        'items:\n  - { x: 0, y: 1 }\n' +
+        'x: [500, 1000]\ngroups:\n  - id: a\n    y: [2, 3]'
+    );
+    // The scale maps one chosen step onto one internal day, targeting roughly
+    // ten ticks, so a correctly-built scale spans on the order of ten days.
+    // If the columnar values were excluded, the step would be derived from the
+    // zero-width range of the single inline point and every unit would become
+    // a whole day — stretching this chart to 1000 days and a ruined axis.
+    const positions = chart.items.map((item) => item.x.getTime());
+    const spanDays = (Math.max(...positions) - Math.min(...positions)) / 86400000;
+    expect(spanDays).toBeGreaterThan(1);
+    expect(spanDays).toBeLessThanOrEqual(20);
+  });
+
+  // Same requirement for category mode: indices are assigned in
+  // first-appearance order across every source of points.
+  it('assigns category indices across inline and columnar values together', () => {
+    const chart = chartFrom(
+      'options: { xAxis: category }\n' +
+        'items:\n  - { x: Mon, y: 1 }\n' +
+        'x: [Tue, Wed]\ngroups:\n  - id: a\n    y: [2, 3]'
+    );
+    expect(chart.items.map((item) => chart.scale.formatLabel(item.x))).toEqual([
+      'Mon',
+      'Tue',
+      'Wed',
+    ]);
+  });
 });
