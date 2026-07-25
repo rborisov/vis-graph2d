@@ -81,3 +81,18 @@ export function stubCreateEl(): void {
     },
   });
 }
+
+/**
+ * NOT part of the task brief's given test-dom.ts contents. `main.ts` calls
+ * Obsidian's `el.empty()` DOM extension (also types-only here, see
+ * stubCreateEl above), to clear the loading placeholder / prior chart /
+ * error box before rendering the next state. Only needed by main.test.ts.
+ */
+export function stubEmpty(): void {
+  Object.defineProperty(window.HTMLElement.prototype, 'empty', {
+    configurable: true,
+    value: function empty(this: HTMLElement): void {
+      while (this.firstChild) this.removeChild(this.firstChild);
+    },
+  });
+}

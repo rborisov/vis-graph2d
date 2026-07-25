@@ -28,6 +28,7 @@ export default tseslint.config(
 		"dist",
 		"esbuild.config.mjs",
 		"eslint.config.js",
+		"vitest.config.ts",
 		"version-bump.mjs",
 		"versions.json",
 		"main.js",

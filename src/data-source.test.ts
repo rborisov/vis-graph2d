@@ -77,6 +77,22 @@ describe('parseDataFile', () => {
       'Data file "a.txt" must be .csv, .json, .yaml, or .yml.'
     );
   });
+
+  it('keeps a comma inside a quoted CSV field as part of the value', () => {
+    const rows = parseDataFile('a.csv', 'x,y\n"Jan, 2026",10');
+    expect(rows).toEqual([{ x: 'Jan, 2026', y: 10 }]);
+  });
+
+  it('unescapes a doubled quote inside a quoted CSV field', () => {
+    const rows = parseDataFile('a.csv', 'x,y\n"Say ""hi""",10');
+    expect(rows).toEqual([{ x: 'Say "hi"', y: 10 }]);
+  });
+
+  it('throws a plain-language error for an unterminated quote in a CSV field', () => {
+    expect(() => parseDataFile('a.csv', 'x,y\n"Jan,10')).toThrow(
+      'Data file "a.csv" has an unterminated quote.'
+    );
+  });
 });
 
 describe('collectDataPaths', () => {
@@ -93,6 +109,10 @@ describe('collectDataPaths', () => {
 
   it('strips wikilink brackets', () => {
     expect(collectDataPaths(block({ data: '[[a.csv]]' }))).toEqual(['a.csv']);
+  });
+
+  it('strips a pipe alias from a wikilink reference', () => {
+    expect(collectDataPaths(block({ data: '[[a.csv|My Data]]' }))).toEqual(['a.csv']);
   });
 
   it('returns an empty list when nothing references a file', () => {
@@ -147,6 +167,14 @@ describe('resolveData', () => {
       reader({ 'a.csv': 'x,y\n1,10' })
     );
     expect(result.items).toHaveLength(1);
+  });
+
+  it('resolves a wikilink reference with a pipe alias', async () => {
+    const result = await resolveData(
+      block({ data: '[[a.csv|My Data]]' }),
+      reader({ 'a.csv': 'x,y\n1,10' })
+    );
+    expect(result.items).toEqual([{ x: 1, y: 10 }]);
   });
 
   it('throws a clear error for a missing file', async () => {

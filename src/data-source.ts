@@ -80,7 +80,7 @@ function parseCsv(path: string, content: string): RawPoint[] {
     .map((line) => line.trim())
     .filter((line) => line !== '');
 
-  const header = lines[0]!.split(',').map((cell) => cell.trim().toLowerCase());
+  const header = splitCsvLine(lines[0]!, path).map((cell) => cell.toLowerCase());
   const xIndex = header.indexOf('x');
   const yIndex = header.indexOf('y');
   const groupIndex = header.indexOf('group');
@@ -90,7 +90,7 @@ function parseCsv(path: string, content: string): RawPoint[] {
 
   const rows: RawPoint[] = [];
   for (const line of lines.slice(1)) {
-    const cells = line.split(',').map((cell) => cell.trim());
+    const cells = splitCsvLine(line, path);
     const row: RawPoint = {
       x: coerce(cells[xIndex]),
       y: coerce(cells[yIndex]),
@@ -103,6 +103,57 @@ function parseCsv(path: string, content: string): RawPoint[] {
   return rows;
 }
 
+/**
+ * Splits one CSV line into fields. Not a full RFC 4180 parser: a
+ * double-quoted field may contain commas, and a doubled `""` inside one is a
+ * literal quote, but newlines inside quoted fields are not supported (lines
+ * are already split on newlines before this runs). An unterminated quote
+ * throws rather than silently mis-parsing the rest of the line.
+ */
+function splitCsvLine(line: string, path: string): string[] {
+  const fields: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"' && field.trim() === '') {
+      inQuotes = true;
+      field = '';
+      i++;
+      continue;
+    }
+    if (ch === ',') {
+      fields.push(field.trim());
+      field = '';
+      i++;
+      continue;
+    }
+    field += ch;
+    i++;
+  }
+  if (inQuotes) {
+    throw new Error(`Data file "${path}" has an unterminated quote.`);
+  }
+  fields.push(field.trim());
+  return fields;
+}
+
 /** Numbers become numbers; anything else stays a string for category axes. */
 function coerce(cell: string | undefined): unknown {
   if (cell === undefined || cell === '') return undefined;
@@ -112,7 +163,9 @@ function coerce(cell: string | undefined): unknown {
 
 function stripWikilink(ref: string): string {
   const trimmed = ref.trim();
-  return trimmed.startsWith('[[') && trimmed.endsWith(']]')
+  const unwrapped = trimmed.startsWith('[[') && trimmed.endsWith(']]')
     ? trimmed.slice(2, -2).trim()
     : trimmed;
+  const pipeIndex = unwrapped.indexOf('|');
+  return pipeIndex === -1 ? unwrapped : unwrapped.slice(0, pipeIndex).trim();
 }
