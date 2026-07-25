@@ -178,6 +178,21 @@ describe('normalize', () => {
     expect(spanDays).toBeLessThanOrEqual(20);
   });
 
+  // Left to vis, this throws from inside the Graph2d constructor after it has
+  // already registered a resize listener, leaking it with no instance to
+  // destroy. Rejecting it here is both a cleaner message and a closed leak.
+  it('throws for a duplicated group id', () => {
+    expect(() =>
+      chartFrom('groups:\n  - id: a\n  - id: a\nitems:\n  - { x: "2026-01-01", y: 1 }')
+    ).toThrow('Group "a" is declared more than once.');
+  });
+
+  it('treats a numeric and string group id as the same declaration', () => {
+    expect(() =>
+      chartFrom('groups:\n  - id: 1\n  - id: "1"\nitems:\n  - { x: "2026-01-01", y: 1 }')
+    ).toThrow('is declared more than once');
+  });
+
   // Same requirement for category mode: indices are assigned in
   // first-appearance order across every source of points.
   it('assigns category indices across inline and columnar values together', () => {

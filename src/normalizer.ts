@@ -27,6 +27,18 @@ export function normalize(
   const groups: VisGroup[] = (block.groups ?? []).map(compileGroup);
   const declaredIds = new Set(groups.map((g) => String(g.id)));
 
+  // vis rejects duplicate ids from inside its own constructor, after it has
+  // already registered a window resize listener and an interval — so the
+  // throw escapes with no instance to destroy and the listener leaks. Catching
+  // it here also turns a cryptic internal message into an actionable one.
+  if (declaredIds.size !== groups.length) {
+    const seen = new Set<string>();
+    const duplicate = groups
+      .map((g) => String(g.id))
+      .find((id) => (seen.has(id) ? true : (seen.add(id), false)));
+    throw new Error(`Group "${String(duplicate)}" is declared more than once.`);
+  }
+
   const items = points.map((point, index) =>
     toVisPoint(point, index, scale, declaredIds, groups.length > 0)
   );
