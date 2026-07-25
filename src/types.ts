@@ -1,3 +1,5 @@
+import type { XScale } from './x-scale';
+
 export type XAxisMode = 'time' | 'numeric' | 'category';
 
 export type GraphType = 'line' | 'bar' | 'points';
@@ -84,4 +86,13 @@ export interface VisGroup {
   style?: string;
   options?: Record<string, unknown>;
   visible?: boolean;
+}
+
+export interface NormalizedChart {
+  items: VisPoint[];
+  groups: VisGroup[];
+  visOptions: Record<string, unknown>;
+  scale: XScale;
+  /** Explicit container height from block options, if the author set one. */
+  height?: string;
 }
