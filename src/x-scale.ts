@@ -112,9 +112,15 @@ class NumericScale implements XScale {
   formatLabel(value: MomentLike): string {
     const slots = value.valueOf() / MS_PER_DAY;
     const authorValue = this.anchor + slots * this.step;
-    // Float division then multiplication reintroduces tiny errors; 12
-    // significant digits is more precision than any axis label needs.
-    return String(Number(authorValue.toPrecision(12)));
+    // Float division then multiplication reintroduces tiny errors (e.g.
+    // 0.30000000000000004 instead of 0.3); rounding to 15 significant
+    // digits strips that dust while still preserving realistic
+    // high-magnitude input such as Unix milliseconds, which needs 13+
+    // significant digits to distinguish adjacent ticks. 15 is the ceiling:
+    // it covers every value up to Number.MAX_SAFE_INTEGER territory
+    // (~9e15), beyond which float representation itself — not this guard —
+    // is the limit, and no precision constant can fix that.
+    return String(Number(authorValue.toPrecision(15)));
   }
 
   axisHints(): Record<string, unknown> {

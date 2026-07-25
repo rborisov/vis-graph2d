@@ -214,6 +214,57 @@ describe('numeric scale', () => {
     const scale = createXScale('numeric', [0, 10]);
     expect(() => scale.toInternal('abc')).toThrow('not a number');
   });
+
+  it('throws for non-finite numeric input (Infinity, -Infinity, NaN)', () => {
+    const scale = createXScale('numeric', [0, 10]);
+    expect(() => scale.toInternal(Infinity)).toThrow('is not a number');
+    expect(() => scale.toInternal(-Infinity)).toThrow('is not a number');
+    expect(() => scale.toInternal(NaN)).toThrow('is not a number');
+  });
+
+  it('pins tick 3 of [0, 1] to exactly "0.3", not float dust', () => {
+    const scale = createXScale('numeric', [0, 1]);
+    // step = 0.1; tick 3 sits at slots=3 -> 3 * 0.1 = 0.30000000000000004 in
+    // raw float math. The precision guard in formatLabel must clean this to
+    // exactly '0.3'.
+    expect(scale.formatLabel(new Date(3 * MS_PER_DAY))).toBe('0.3');
+  });
+
+  it('produces 11 distinct, correct labels for realistic Unix-millisecond input', () => {
+    // Unix milliseconds require 13+ significant digits to distinguish
+    // adjacent ticks; a precision guard that truncates too aggressively
+    // collapses distinct values into duplicate labels.
+    const min = 1700000000000;
+    const max = 1700000000010;
+    const scale = createXScale('numeric', [min, max]);
+    const labels: string[] = [];
+    for (let v = min; v <= max; v++) {
+      labels.push(scale.formatLabel(new Date(scale.toInternal(v))));
+    }
+    expect(labels).toEqual([
+      '1700000000000',
+      '1700000000001',
+      '1700000000002',
+      '1700000000003',
+      '1700000000004',
+      '1700000000005',
+      '1700000000006',
+      '1700000000007',
+      '1700000000008',
+      '1700000000009',
+      '1700000000010',
+    ]);
+    expect(new Set(labels).size).toBe(11);
+  });
+
+  it('forces UTC on the axis moment (labels stay timezone-independent)', () => {
+    const hints = createXScale('numeric', [0, 100]).axisHints();
+    const momentFactory = hints.moment as (d: Date) => { format(fmt: string): string };
+    const formatted = momentFactory(new Date('2020-06-15T23:30:00Z')).format('YYYY-MM-DD HH');
+    // In any non-UTC zone this would read a different hour/day if .utc()
+    // were dropped from UTC_MOMENT.
+    expect(formatted).toBe('2020-06-15 23');
+  });
 });
 
 describe('category scale', () => {
@@ -260,6 +311,15 @@ describe('category scale', () => {
 
   it('overrides axis labels', () => {
     expect(createXScale('category', ['Mon']).overridesLabels).toBe(true);
+  });
+
+  it('forces UTC on the axis moment (labels stay timezone-independent)', () => {
+    const hints = createXScale('category', ['Mon', 'Tue']).axisHints();
+    const momentFactory = hints.moment as (d: Date) => { format(fmt: string): string };
+    const formatted = momentFactory(new Date('2020-06-15T23:30:00Z')).format('YYYY-MM-DD HH');
+    // In any non-UTC zone this would read a different hour/day if .utc()
+    // were dropped from UTC_MOMENT.
+    expect(formatted).toBe('2020-06-15 23');
   });
 });
 
