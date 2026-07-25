@@ -108,7 +108,7 @@ describe('renderGraph2d', () => {
  * main.test.ts for the rest of that path -- rasterize() itself needs a real
  * canvas and cannot run under happy-dom). These tests are the regression
  * check that matters most here: the export path must only ever change
- * behavior when `autoHeight` is explicitly true, never for a normal render.
+ * behavior when `exportMode` is explicitly true, never for a normal render.
  */
 describe('renderGraph2d export path (autoHeight)', () => {
   function svgHeight(el: HTMLElement): string | undefined {

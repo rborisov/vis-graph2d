@@ -41,7 +41,8 @@ export async function capturePng(el: HTMLElement): Promise<Capture> {
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     // toPng() sizes its capture canvas from the element's own reported
     // height (offsetHeight/getBoundingClientRect), not the true extent of
-    // its content — .tl-auto-height's overflow:visible (renderer.ts) makes
+    // its content — .graph2d-plugin (renderer.ts) never sets `overflow`,
+    // so it keeps the CSS default of overflow:visible, which makes
     // overflowing content paint on screen without changing that reported
     // height, so a capture based on it could still crop the last row even
     // though nothing looks clipped in a live view. el.scrollHeight was
@@ -87,7 +88,7 @@ export async function rasterize(
     // "props.center.height = dom.center.offsetHeight") — but offsetHeight
     // only reflects layout from before this same redraw pass, so it can
     // read one redraw cycle stale, especially with many groups. Forcing a
-    // few more redraw+layout-flush cycles here (beyond renderTimeline()'s
+    // few more redraw+layout-flush cycles here (beyond renderGraph2d()'s
     // single scheduled one) lets the height actually converge before
     // capturing.
     await settleHeight(container, graph);
@@ -121,18 +122,6 @@ export async function rasterize(
   }
 }
 
-// html-to-image's toPng() embeds fonts for faithful capture by injecting a
-// <style> element (with the font's data as base64) into the real
-// document.head — not into a detached clone, despite this repo's earlier
-// static read of its source suggesting otherwise. It's never removed, so
-// repeated calls within the same session (one per rasterized timeline
-// block) each leave their own copy behind. Confirmed in production: pubobs
-// sync of a vault with 181 timeline blocks inflated the shared CSS asset
-// its extractStyles() ships to readers from 1.3MB to 11.4MB (181 duplicate
-// @font-face embeds of an unrelated vault font), which was large enough to
-// OOM-kill pubobs's backend. Snapshotting document.head's <style> elements
-// before the call and removing whatever's new afterward cleans this up —
-// the embedded font data only needs to exist for this one capture.
 // Finds the lowest bottom edge among every descendant of el, relative to
 // el's own top — a direct, can't-be-fooled-by-nested-overflow measurement
 // of the true rendered content height, used as the export capture height
@@ -147,6 +136,18 @@ function measureDeepestBottomEdge(el: HTMLElement): number {
   return Math.ceil(maxBottom);
 }
 
+// html-to-image's toPng() embeds fonts for faithful capture by injecting a
+// <style> element (with the font's data as base64) into the real
+// document.head — not into a detached clone, despite this repo's earlier
+// static read of its source suggesting otherwise. It's never removed, so
+// repeated calls within the same session (one per rasterized timeline
+// block) each leave their own copy behind. Confirmed in production: pubobs
+// sync of a vault with 181 timeline blocks inflated the shared CSS asset
+// its extractStyles() ships to readers from 1.3MB to 11.4MB (181 duplicate
+// @font-face embeds of an unrelated vault font), which was large enough to
+// OOM-kill pubobs's backend. Snapshotting document.head's <style> elements
+// before the call and removing whatever's new afterward cleans this up —
+// the embedded font data only needs to exist for this one capture.
 async function capturePngWithoutLeakingFontStyles(
   el: HTMLElement,
   options: Parameters<typeof toPng>[1]
@@ -184,7 +185,7 @@ async function settleHeight(
 }
 
 // Waits until el's subtree stops mutating for quietForMs, up to maxWaitMs
-// total. Starts with one animation-frame wait so renderTimeline()'s own
+// total. Starts with one animation-frame wait so renderGraph2d()'s own
 // scheduled redraw (see renderer.ts) has a chance to fire and produce at
 // least one mutation before the quiet-period timer starts — otherwise an
 // observer started before anything has changed yet could see "quiet"

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TFile } from 'obsidian';
 import type { Graph2dHandle } from './renderer';
+import type { rasterize } from './rasterize';
 
 /**
  * main.ts is lifecycle-only: parsing, normalizing, and rendering are all
@@ -39,10 +40,17 @@ function deferredRead(): DeferredRead {
   return { promise, resolve };
 }
 
-const { renderGraph2dMock } = vi.hoisted(() => ({ renderGraph2dMock: vi.fn() }));
+const { renderGraph2dMock, rasterizeMock } = vi.hoisted(() => ({
+  renderGraph2dMock: vi.fn(),
+  rasterizeMock: vi.fn<typeof rasterize>(),
+}));
 
 vi.mock('./renderer', () => ({
   renderGraph2d: renderGraph2dMock,
+}));
+
+vi.mock('./rasterize', () => ({
+  rasterize: rasterizeMock,
 }));
 
 /** Fake host element: only the two Obsidian DOM extensions main.ts calls. */
@@ -121,6 +129,8 @@ beforeEach(() => {
   renderGraph2dMock.mockImplementation(
     () => ({ destroy: vi.fn(), redraw: vi.fn() }) satisfies Graph2dHandle
   );
+  rasterizeMock.mockReset();
+  rasterizeMock.mockResolvedValue(undefined);
 });
 
 describe('VisGraph2dPlugin lifecycle', () => {
@@ -222,15 +232,15 @@ describe('VisGraph2dPlugin lifecycle', () => {
 /**
  * Task 10's export path: main.ts routes to rasterize() instead of
  * registering a watcher whenever the code block is rendered inside a
- * pubobs `[data-pubobs-render]` wrapper. `rasterize` itself is not mocked
- * here (its actual capture is covered manually -- see task-10-report.md --
- * since html-to-image needs a real canvas that happy-dom cannot provide).
- * `fakeExportEl` deliberately gives it just enough surface to reach its own
- * try/catch (a `.graph2d-plugin` it will not find), so it fails fast,
- * catches the failure itself, and returns normally -- exactly the "never
- * let a rasterize failure break the note" contract rasterize.ts documents.
- * That is enough to prove main.ts's own routing and watcher-skipping
- * without needing a real canvas.
+ * pubobs `[data-pubobs-render]` wrapper. `./rasterize` is mocked (see
+ * `rasterizeMock` above) so these tests can assert it was actually called,
+ * rather than relying only on side effects of the real implementation
+ * (rasterize's real capture needs a real canvas that happy-dom cannot
+ * provide -- that part is covered manually, see task-10-report.md).
+ * `fakeExportEl` gives main.ts just enough surface to run its own routing
+ * logic (`closest`, `empty`, `createEl`); `querySelector` is included only
+ * because rasterize.ts's real container lookup would otherwise crash if a
+ * test ever exercised the unmocked path.
  */
 function fakeExportEl(): HTMLElement {
   return {
@@ -246,23 +256,81 @@ describe('VisGraph2dPlugin pubobs export routing', () => {
     const vault = fakeVault('x,y\n1,10');
     const handler = await loadPlugin(vault);
 
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      await handler('data: a.csv', fakeExportEl(), fakeCtx('note.md'));
-    } finally {
-      errorSpy.mockRestore();
-    }
+    await handler('data: a.csv', fakeExportEl(), fakeCtx('note.md'));
 
-    // renderGraph2d was still called (with autoHeight=true, the third arg)
+    // renderGraph2d was still called (with exportMode=true, the third arg)
     // -- the export path renders the chart before handing it to rasterize.
     expect(renderGraph2dMock).toHaveBeenCalledTimes(1);
     expect(renderGraph2dMock.mock.calls[0]?.[2]).toBe(true);
 
+    // rasterize() was actually invoked. This is the assertion with teeth:
+    // deleting the entire `if (isPubobsExport) { await rasterize(...);
+    // return; }` block from main.ts must make this fail (verified --
+    // see task-10-report.md).
+    expect(rasterizeMock).toHaveBeenCalledTimes(1);
+
     // No watcher was registered: a save of the referenced data file must
-    // not trigger a re-render of a block that is now a static image.
+    // not trigger a re-render of a block that is now a static image. A
+    // real macrotask wait is used here (not a fixed number of microtask
+    // ticks): `vault.emitModify` kicks off `reload` -> `runReload` as a
+    // fire-and-forget async chain (resolveData -> normalize ->
+    // renderBlock's continuation), and a couple of `await
+    // Promise.resolve()` ticks is not reliably enough hops for that chain
+    // to reach renderGraph2d again -- which is exactly what let this test
+    // pass even with the routing removed entirely before this fix. A
+    // `setTimeout(0)` yields a full macrotask turn, which drains every
+    // pending microtask first regardless of chain depth.
     vault.emitModify('a.csv');
-    await Promise.resolve();
-    await Promise.resolve();
+    // This file runs under vitest's default (Node) environment, not
+    // happy-dom -- there is no `window` global here to route through, so
+    // this is the one legitimate use of the bare timer the obsidianmd rule
+    // otherwise (correctly) guards against in real plugin code.
+    // eslint-disable-next-line obsidianmd/prefer-window-timers
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(renderGraph2dMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw on unload after a successful export (no double-destroy)', async () => {
+    // rasterize() destroys the graph itself on a successful export, but
+    // (before Task 10's fix) main.ts never cleared `state.graph`
+    // afterward, so `child.onunload`'s own `state.graph?.destroy()` called
+    // destroy() a second time on an already-destroyed graph. The real
+    // Graph2d.destroy() is not idempotent and throws on that second call
+    // (confirmed: `TypeError: Cannot read properties of null (reading
+    // 'root')`) -- mirrored here so this test fails the same way if the
+    // fix regresses, instead of passing vacuously against a `vi.fn()` that
+    // tolerates being called twice.
+    const vault = fakeVault('x,y\n1,10');
+    let destroyCalls = 0;
+    renderGraph2dMock.mockImplementation(
+      () =>
+        ({
+          destroy: () => {
+            destroyCalls += 1;
+            if (destroyCalls > 1) {
+              throw new TypeError("Cannot read properties of null (reading 'root')");
+            }
+          },
+          redraw: vi.fn(),
+        }) satisfies Graph2dHandle
+    );
+    // Simulate a successful export: rasterize() destroys the graph itself
+    // and returns normally, exactly as the real implementation does on the
+    // success path.
+    rasterizeMock.mockImplementation(async (_el, graph) => {
+      graph.destroy();
+    });
+
+    const handler = await loadPlugin(vault);
+    let capturedChild: { load(): void; unload(): void } | undefined;
+    const ctx = fakeCtx('note.md', (c) => {
+      capturedChild = c;
+    });
+
+    await handler('data: a.csv', fakeExportEl(), ctx);
+    expect(destroyCalls).toBe(1); // rasterize's own destroy, on success
+
+    expect(() => capturedChild!.unload()).not.toThrow();
+    expect(destroyCalls).toBe(1); // onunload must not have destroyed again
   });
 });

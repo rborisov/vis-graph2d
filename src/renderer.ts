@@ -12,41 +12,44 @@ const DEFAULT_GRAPH_HEIGHT = '400px';
 export function renderGraph2d(
   el: HTMLElement,
   chart: NormalizedChart,
-  autoHeight = false
+  exportMode = false
 ): Graph2dHandle {
   const container = el.createEl('div');
   container.className = 'graph2d-plugin';
 
-  // A rasterized PNG has no scrollbar, so the export path skips the fixed
-  // CSS height entirely and lets the container grow to whatever height the
-  // chart actually draws at (see graphHeight below, which is what actually
-  // governs that drawn height and is deliberately NOT reset for the export
-  // path).
-  const fixedHeight = autoHeight ? undefined : chart.height;
+  // exportMode means this render is destined for rasterize(): no fixed CSS
+  // container height (a rasterized PNG has no scrollbar, so there is
+  // nothing for a fixed height to protect against overflowing), plus the
+  // wider .g2d-export-width layout below. Nothing here "auto"-grows the
+  // container -- with no CSS height set, the container simply sizes to
+  // whatever height its content draws at, and that drawn height is
+  // governed entirely by graphHeight below (deliberately NOT reset for
+  // export mode).
+  const fixedHeight = exportMode ? undefined : chart.height;
   if (fixedHeight !== undefined) container.style.height = fixedHeight;
 
   // pubobs renders offscreen at a fixed narrow width; charts need more room
   // so axis labels are not cramped. The exported <img> scales back down
   // (see .g2d-export-width in styles.css).
-  if (autoHeight) container.addClass('g2d-export-width');
+  if (exportMode) container.addClass('g2d-export-width');
 
   const visOptions: Record<string, unknown> = {
     // Always honors the chart's own configured (or default) drawing
     // height, on both paths. This used to read `fixedHeight ??
     // DEFAULT_GRAPH_HEIGHT`, which reset the chart's actual drawn height
-    // back down to the 400px default whenever autoHeight was true -- even
-    // if the author had configured a taller chart.height. That defeated
-    // the "grows to fit the whole chart" comment above: the export always
-    // drew (and therefore captured) at 400px regardless of the chart's
-    // real content, and since a static PNG has no scrollbar to reveal the
-    // rest, anything past that height was silently cropped in the
-    // exported image. Reading chart.height directly here means the export
-    // always draws at the same height the interactive widget uses for
-    // this chart -- never less.
+    // back down to the 400px default whenever exportMode was true -- even
+    // if the author had configured a taller chart.height, since
+    // fixedHeight is always undefined in export mode (see above). The
+    // export silently ignored the author's configured height and always
+    // drew at the 400px default, regardless of what the chart was actually
+    // configured to draw at. Reading chart.height directly here means the
+    // export always draws at the same height the interactive widget uses
+    // for this chart -- the 400px default only applies when that's what
+    // the author actually configured (or left unset).
     graphHeight: chart.height ?? DEFAULT_GRAPH_HEIGHT,
     // The export path captures once and throws the live chart away, so
     // there is nothing to resize into.
-    autoResize: !autoHeight,
+    autoResize: !exportMode,
     ...chart.visOptions,
   };
 
