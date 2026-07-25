@@ -292,28 +292,35 @@ describe('VisGraph2dPlugin pubobs export routing', () => {
 
   it('does not throw on unload after a successful export (no double-destroy)', async () => {
     // rasterize() destroys the graph itself on a successful export, but
-    // (before Task 10's fix) main.ts never cleared `state.graph`
-    // afterward, so `child.onunload`'s own `state.graph?.destroy()` called
-    // destroy() a second time on an already-destroyed graph. The real
-    // Graph2d.destroy() is not idempotent and throws on that second call
-    // (confirmed: `TypeError: Cannot read properties of null (reading
-    // 'root')`) -- mirrored here so this test fails the same way if the
-    // fix regresses, instead of passing vacuously against a `vi.fn()` that
-    // tolerates being called twice.
+    // main.ts deliberately keeps `state.graph` set after a successful
+    // export, because rasterize() destroys the graph on success but leaves
+    // it mounted on failure and does not report which happened. The safety
+    // therefore lives in renderGraph2d's handle, whose destroy() is
+    // idempotent (see renderer.test.ts). vis's own destroy() is NOT --
+    // a second call throws `TypeError: Cannot read properties of null
+    // (reading 'root')`. This mock models that real contract: a raw
+    // non-idempotent inner destroy behind the same idempotent guard the
+    // production handle applies, so teardown calling destroy() again is
+    // safe here for the same reason it is safe in production.
     const vault = fakeVault('x,y\n1,10');
     let destroyCalls = 0;
-    renderGraph2dMock.mockImplementation(
-      () =>
-        ({
-          destroy: () => {
-            destroyCalls += 1;
-            if (destroyCalls > 1) {
-              throw new TypeError("Cannot read properties of null (reading 'root')");
-            }
-          },
-          redraw: vi.fn(),
-        }) satisfies Graph2dHandle
-    );
+    renderGraph2dMock.mockImplementation(() => {
+      let destroyed = false;
+      const rawDestroy = () => {
+        destroyCalls += 1;
+        if (destroyCalls > 1) {
+          throw new TypeError("Cannot read properties of null (reading 'root')");
+        }
+      };
+      return {
+        destroy: () => {
+          if (destroyed) return;
+          destroyed = true;
+          rawDestroy();
+        },
+        redraw: vi.fn(),
+      } satisfies Graph2dHandle;
+    });
     // Simulate a successful export: rasterize() destroys the graph itself
     // and returns normally, exactly as the real implementation does on the
     // success path.

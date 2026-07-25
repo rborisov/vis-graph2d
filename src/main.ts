@@ -140,14 +140,13 @@ export default class VisGraph2dPlugin extends Plugin {
       // down.
       if (isPubobsExport) {
         await rasterize(state.el, state.graph, this.app, state.sourcePath, state.source);
-        // rasterize() destroys the graph itself on a successful export (it
-        // replaces the container with a static <img>), but never clears
-        // this reference. Left alone, child.onunload's own
-        // `state.graph?.destroy()` would call destroy() a second time on an
-        // already-destroyed Graph2d, which throws -- Graph2d.destroy() is
-        // not idempotent. Null it out here, matching runReload's
-        // destroy-then-null pattern below.
-        state.graph = null;
+        // Deliberately keep state.graph set. rasterize() destroys the graph
+        // on a successful export but leaves it mounted and interactive on
+        // failure, and does not report which happened — so this cannot know
+        // whether a teardown still needs to destroy it. renderGraph2d's
+        // handle makes destroy() idempotent precisely so the answer does not
+        // matter: onunload can always call it, and the failure path still
+        // gets cleaned up instead of leaking a live chart.
         return;
       }
 

@@ -86,6 +86,20 @@ describe('renderGraph2d', () => {
     expect(text).not.toContain('Errors have been found');
   });
 
+  it('destroy() is idempotent', () => {
+    // vis's own destroy() throws on a second call ("Cannot read properties
+    // of null"). Callers cannot always tell whether it already ran: on the
+    // export path rasterize() destroys the graph on success but leaves it
+    // mounted on failure, so the owning render child must be able to call
+    // destroy() unconditionally at teardown without leaking on failure or
+    // throwing on success.
+    const el = createHost();
+    const graph = renderGraph2d(el, normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1 }')));
+    graph.destroy();
+    expect(() => graph.destroy()).not.toThrow();
+    expect(el.querySelector('.vis-panel')).toBeNull();
+  });
+
   it('leaves no container behind when construction throws', () => {
     const el = createHost();
     // Built directly rather than through normalize(), which now rejects

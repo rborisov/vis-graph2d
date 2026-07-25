@@ -76,6 +76,23 @@ export function renderGraph2d(
     // Without this, iOS renders into a zero-size box.
     window.requestAnimationFrame(() => graph!.redraw());
 
+    // vis's own destroy() is not idempotent — a second call throws
+    // "Cannot read properties of null (reading 'root')". Callers legitimately
+    // cannot always tell whether it already ran: rasterize() destroys the
+    // graph on a successful export but leaves it mounted on failure, so the
+    // owning render child has no way to know which happened. Guarding here
+    // means teardown can always call destroy() without tracking that.
+    // Patched on the instance rather than wrapped in a new object: tests and
+    // the export path reach through this handle to vis internals such as
+    // `timeAxis.step`, which a plain {destroy, redraw} wrapper would hide.
+    let destroyed = false;
+    const originalDestroy = graph.destroy.bind(graph);
+    (graph as { destroy: () => void }).destroy = () => {
+      if (destroyed) return;
+      destroyed = true;
+      originalDestroy();
+    };
+
     return graph;
   } catch (e) {
     graph?.destroy();
