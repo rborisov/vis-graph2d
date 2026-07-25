@@ -24,20 +24,23 @@ export function parseBlock(source: string): RawBlock {
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
     const groups = Array.isArray(obj.groups)
-      ? (obj.groups as RawGroup[]).filter(Boolean)
+      ? (obj.groups as unknown[]).filter(isObject).map((g) => g as RawGroup)
       : undefined;
-    const items = Array.isArray(obj.items) ? toPoints(obj.items) : [];
+    // An explicit `items` array is a deliberate declaration of intent, even
+    // when it is (or normalizes to) empty, so it alone satisfies validity.
+    const itemsProvided = Array.isArray(obj.items);
+    const items = itemsProvided ? toPoints(obj.items as unknown[]) : [];
     const x = Array.isArray(obj.x) ? (obj.x as unknown[]) : undefined;
     const data = typeof obj.data === 'string' ? obj.data : undefined;
 
-    // A block is valid if it explicitly has any of the three supported data
-    // shapes: items (even if empty), data file reference, columnar x/y, or groups.
-    const hasItems = 'items' in obj;
-    const hasData = 'data' in obj;
-    const hasX = 'x' in obj;
-    const hasGroups = 'groups' in obj;
+    // A block is valid only if it has usable content in one of the three
+    // supported data shapes: items, a data file reference, columnar x/y, or
+    // a group that itself carries data or y values.
+    const hasGroupData =
+      groups?.some((g) => g.data !== undefined || Array.isArray(g.y)) ??
+      false;
 
-    if (!hasItems && !hasData && !hasX && !hasGroups) {
+    if (!itemsProvided && data === undefined && x === undefined && !hasGroupData) {
       throw new Error(
         'Block must have "items", "data", or columnar "x"/"y" arrays.'
       );
@@ -61,5 +64,9 @@ export function parseBlock(source: string): RawBlock {
 }
 
 function toPoints(value: unknown[]): RawPoint[] {
-  return value.filter(Boolean) as RawPoint[];
+  return value.filter(isObject).map((v) => v as RawPoint);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

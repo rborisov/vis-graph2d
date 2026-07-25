@@ -119,4 +119,49 @@ groups:
     const result = parseBlock(source);
     expect(result.items).toHaveLength(1);
   });
+
+  it('throws when groups holds a non-array value and there is no other data source', () => {
+    expect(() => parseBlock('groups: "invalid"')).toThrow(
+      'must have "items", "data", or columnar "x"/"y" arrays'
+    );
+  });
+
+  it('throws when items holds a non-array value and there is no other data source', () => {
+    expect(() => parseBlock('items: "invalid"')).toThrow(
+      'must have "items", "data", or columnar "x"/"y" arrays'
+    );
+  });
+
+  it('throws when x holds a non-array value and there is no other data source', () => {
+    expect(() => parseBlock('x: "invalid"')).toThrow(
+      'must have "items", "data", or columnar "x"/"y" arrays'
+    );
+  });
+
+  it('throws when data holds a non-string value and there is no other data source', () => {
+    expect(() => parseBlock('data: 123')).toThrow(
+      'must have "items", "data", or columnar "x"/"y" arrays'
+    );
+  });
+
+  it('throws when every group carries neither data nor y', () => {
+    const source = 'groups:\n  - id: a\n    content: metadata only';
+    expect(() => parseBlock(source)).toThrow(
+      'must have "items", "data", or columnar "x"/"y" arrays'
+    );
+  });
+
+  it('filters out non-object entries in the groups array', () => {
+    const source =
+      'groups:\n  - id: a\n    data: series.csv\n  - just a string\nitems: []';
+    const result = parseBlock(source);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups![0]!.id).toBe('a');
+  });
+
+  it('filters out non-object entries in the items array', () => {
+    const source = 'items:\n  - { x: 1, y: 2 }\n  - just a string';
+    const result = parseBlock(source);
+    expect(result.items).toHaveLength(1);
+  });
 });
