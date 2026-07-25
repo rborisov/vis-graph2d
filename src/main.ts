@@ -5,6 +5,7 @@ import { renderGraph2d } from './renderer';
 import type { Graph2dHandle } from './renderer';
 import { collectDataPaths, resolveData } from './data-source';
 import type { DataReader, RawBlock } from './types';
+import { DEFAULT_SETTINGS, Graph2dSettingTab, Graph2dSettings, toBlockDefaults } from './settings';
 
 /**
  * All mutable state for one rendered code block, across its initial load
@@ -35,7 +36,24 @@ export default class VisGraph2dPlugin extends Plugin {
   /** Live blocks keyed by the data files they read, for refresh on modify. */
   private readonly watchers = new Set<BlockState>();
 
+  settings!: Graph2dSettings;
+
+  async loadSettings(): Promise<void> {
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      (await this.loadData()) as Partial<Graph2dSettings>
+    );
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+
   async onload(): Promise<void> {
+    await this.loadSettings();
+    this.addSettingTab(new Graph2dSettingTab(this.app, this));
+
     this.registerMarkdownCodeBlockProcessor('vis-graph2d', async (source, el, ctx) => {
       const child = new MarkdownRenderChild(el);
       ctx.addChild(child);
@@ -92,7 +110,7 @@ export default class VisGraph2dPlugin extends Plugin {
 
     try {
       const resolved = await resolveData(block, this.reader());
-      const chart = normalize(resolved);
+      const chart = normalize(resolved, toBlockDefaults(this.settings));
 
       // The note closed (or this block was removed) while the load above
       // was in flight: skip rendering entirely and register no watcher,
