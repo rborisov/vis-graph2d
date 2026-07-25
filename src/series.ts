@@ -24,6 +24,8 @@ const AUTHORING_FIELDS = new Set([
   'visible',
 ]);
 
+const VALID_TYPES = new Set(['line', 'bar', 'points']);
+
 /** Compiles one authored group into the shape vis Graph2d consumes. */
 export function compileGroup(raw: RawGroup): VisGroup {
   const options: Record<string, unknown> = {};
@@ -33,8 +35,16 @@ export function compileGroup(raw: RawGroup): VisGroup {
     if (!AUTHORING_FIELDS.has(key)) options[key] = value;
   }
 
-  if (raw.type !== undefined) options.style = raw.type;
-  if (raw.fill !== undefined) options.shaded = compileFill(raw.fill);
+  if (raw.type !== undefined) {
+    if (!VALID_TYPES.has(raw.type)) {
+      throw new Error(
+        `Group "${String(raw.id)}" has an invalid "type" value: "${String(raw.type)}". ` +
+          'Valid values are "line", "bar", and "points".'
+      );
+    }
+    options.style = raw.type;
+  }
+  if (raw.fill !== undefined) options.shaded = compileFill(raw.fill, raw.id);
   if (raw.interpolation !== undefined) {
     options.interpolation =
       raw.interpolation === false
@@ -62,13 +72,16 @@ export function compileGroup(raw: RawGroup): VisGroup {
   return group;
 }
 
-function compileFill(fill: FillSpec): Record<string, unknown> {
+function compileFill(fill: FillSpec, id: string | number): Record<string, unknown> {
   if (fill === true) return { orientation: 'zero' };
   if (fill === false) return { enabled: false };
   if (fill.to !== undefined) return { groupId: fill.to };
   if (fill.below !== undefined) return { orientation: 'bottom' };
   if (fill.above !== undefined) return { orientation: 'top' };
-  return { orientation: 'zero' };
+  throw new Error(
+    `Group "${String(id)}" has a "fill" object with no recognized key. ` +
+      'Use "to", "below", or "above".'
+  );
 }
 
 /** Builds the inline SVG CSS string from the friendly colour fields. */
@@ -77,8 +90,23 @@ function compileStyle(raw: RawGroup): string | undefined {
   if (raw.color !== undefined) {
     declarations.push(`stroke:${raw.color}`, `fill:${raw.color}`);
   }
-  if (raw.width !== undefined) declarations.push(`stroke-width:${raw.width}`);
+  if (raw.width !== undefined) {
+    if (typeof raw.width !== 'number' || !Number.isFinite(raw.width)) {
+      throw new Error(`Group "${String(raw.id)}" has a "width" value that is not a number.`);
+    }
+    declarations.push(`stroke-width:${raw.width}`);
+  }
   if (raw.dashes !== undefined) {
+    if (!Array.isArray(raw.dashes)) {
+      throw new Error(
+        `Group "${String(raw.id)}" has a "dashes" value that is not a list of numbers.`
+      );
+    }
+    if (raw.dashes.some((d) => typeof d !== 'number' || !Number.isFinite(d))) {
+      throw new Error(
+        `Group "${String(raw.id)}" has a "dashes" value with a non-numeric entry.`
+      );
+    }
     declarations.push(`stroke-dasharray:${raw.dashes.join(' ')}`);
   }
   return declarations.length > 0 ? `${declarations.join(';')};` : undefined;

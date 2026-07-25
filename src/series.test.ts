@@ -170,4 +170,60 @@ describe('compileGroup', () => {
   it('omits options entirely when the group needs none', () => {
     expect(compileGroup({ id: 'a', content: 'A' }).options).toBeUndefined();
   });
+
+  it('accepts every valid "type" value', () => {
+    expect(compileGroup({ id: 'a', type: 'line' }).options?.style).toBe('line');
+    expect(compileGroup({ id: 'a', type: 'bar' }).options?.style).toBe('bar');
+    expect(compileGroup({ id: 'a', type: 'points' }).options?.style).toBe('points');
+  });
+
+  it('throws a plain-language error for an invalid "type" value', () => {
+    expect(() =>
+      compileGroup({ id: 'a', type: 'scatter' as unknown as 'line' })
+    ).toThrow(
+      'Group "a" has an invalid "type" value: "scatter". Valid values are "line", "bar", and "points".'
+    );
+  });
+
+  it('accepts a fill object with a recognized key', () => {
+    expect(compileGroup({ id: 'a', fill: { below: 0 } }).options?.shaded).toEqual({
+      orientation: 'bottom',
+    });
+  });
+
+  it('throws a plain-language error for a fill object with no recognized key', () => {
+    expect(() =>
+      compileGroup({ id: 'a', fill: { blow: 0 } as unknown as { below: number } })
+    ).toThrow(
+      'Group "a" has a "fill" object with no recognized key. Use "to", "below", or "above".'
+    );
+  });
+
+  it('accepts a numeric width', () => {
+    expect(compileGroup({ id: 'a', width: 3 }).style).toContain('stroke-width:3');
+  });
+
+  it('throws a plain-language error for a non-numeric width', () => {
+    expect(() =>
+      compileGroup({ id: 'a', width: 'thick' as unknown as number })
+    ).toThrow('Group "a" has a "width" value that is not a number.');
+  });
+
+  it('accepts a dashes array of numbers', () => {
+    expect(compileGroup({ id: 'a', dashes: [5, 5] }).style).toContain(
+      'stroke-dasharray:5 5'
+    );
+  });
+
+  it('throws a plain-language error for a non-array dashes value', () => {
+    expect(() =>
+      compileGroup({ id: 'a', dashes: '5,5' as unknown as number[] })
+    ).toThrow('Group "a" has a "dashes" value that is not a list of numbers.');
+  });
+
+  it('throws a plain-language error for a dashes array with a non-numeric entry', () => {
+    expect(() =>
+      compileGroup({ id: 'a', dashes: ['a', 'b'] as unknown as number[] })
+    ).toThrow('Group "a" has a "dashes" value with a non-numeric entry.');
+  });
 });
