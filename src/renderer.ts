@@ -1,0 +1,82 @@
+import { Graph2d } from 'vis-timeline/standalone';
+import type { NormalizedChart } from './types';
+import type { MomentLike } from './x-scale';
+
+export interface Graph2dHandle {
+  destroy(): void;
+  redraw(): void;
+}
+
+const DEFAULT_GRAPH_HEIGHT = '400px';
+
+export function renderGraph2d(
+  el: HTMLElement,
+  chart: NormalizedChart,
+  autoHeight = false
+): Graph2dHandle {
+  const container = el.createEl('div');
+  container.className = 'graph2d-plugin';
+
+  // A rasterized PNG has no scrollbar, so the export path ignores any
+  // requested height and grows to fit the whole chart instead.
+  const fixedHeight = autoHeight ? undefined : chart.height;
+  if (fixedHeight !== undefined) container.style.height = fixedHeight;
+
+  const visOptions: Record<string, unknown> = {
+    graphHeight: fixedHeight ?? DEFAULT_GRAPH_HEIGHT,
+    // The export path captures once and throws the live chart away, so
+    // there is nothing to resize into.
+    autoResize: !autoHeight,
+    ...chart.visOptions,
+  };
+
+  const Graph2dConstructor = Graph2d as unknown as new (
+    ...args: unknown[]
+  ) => Graph2dHandle;
+
+  const graph =
+    chart.groups.length > 0
+      ? new Graph2dConstructor(container, chart.items, chart.groups, visOptions)
+      : new Graph2dConstructor(container, chart.items, visOptions);
+
+  if (chart.scale.overridesLabels) {
+    applyLabelFormatter(graph, (value: MomentLike) => chart.scale.formatLabel(value));
+  }
+
+  // Without this, iOS renders into a zero-size box.
+  window.requestAnimationFrame(() => graph.redraw());
+
+  return graph;
+}
+
+/**
+ * Installs a custom axis label formatter.
+ *
+ * TimeStep honours a function for `format.minorLabels` at runtime, but
+ * Graph2d.setOptions always runs vis's option validator, whose schema only
+ * permits an object there — passing the function normally would log a
+ * spurious "Errors have been found" warning on every render. Core.setOptions
+ * is the same code path without the validator, one step up the prototype
+ * chain (Graph2d.prototype is itself a Core instance).
+ *
+ * vis invokes `format` with a moment, never a Date — see MomentLike.
+ */
+function applyLabelFormatter(
+  graph: Graph2dHandle,
+  format: (value: MomentLike) => string
+): void {
+  const options = { format: { minorLabels: format } };
+  const graph2dProto = Object.getPrototypeOf(graph) as object | null;
+  const coreProto = graph2dProto
+    ? (Object.getPrototypeOf(graph2dProto) as { setOptions?: (o: unknown) => void } | null)
+    : null;
+
+  if (typeof coreProto?.setOptions === 'function') {
+    coreProto.setOptions.call(graph, options);
+    return;
+  }
+
+  // Fall back to the public API if vis ever changes its prototype shape.
+  // Labels still render correctly; the console just gains a warning.
+  (graph as unknown as { setOptions(o: unknown): void }).setOptions(options);
+}
