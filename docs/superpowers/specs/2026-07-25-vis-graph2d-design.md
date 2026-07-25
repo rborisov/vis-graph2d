@@ -66,11 +66,16 @@ interface:
 
 ```ts
 interface XScale {
-  toInternal(value: unknown): number;      // author x value → epoch ms
-  formatLabel(date: Date): string;         // epoch → displayed axis label
+  toInternal(value: unknown): number;        // author x value → epoch ms
+  formatLabel(value: MomentLike): string;    // axis position → displayed label
   axisHints(dataRange): Partial<VisOptions>; // timeAxis / label visibility
 }
 ```
+
+`formatLabel` takes `MomentLike` (`{ valueOf(): number }`), **not** `Date`. vis
+invokes the label callback with its internal **moment** object, which has no
+`getTime()`. `valueOf()` is the one accessor both moment and `Date` share, so
+this signature works in production and lets tests pass plain `Date`s.
 
 The renderer consumes an `XScale` and never branches on axis mode.
 
@@ -87,12 +92,17 @@ The renderer consumes an `XScale` and never branches on axis mode.
   are assigned indices in first-appearance order; `formatLabel` returns the
   name, out-of-range indices return empty string. `timeAxis.step` is 1.
 
-Label rewriting uses vis's `format.minorLabels` function hook.
+Label rewriting uses vis's `format.minorLabels` function hook. **Risk resolved
+during planning** — verified directly against the bundled library:
 
-**Risk:** if the packaged vis-timeline version does not accept a *function* for
-`format.minorLabels`, the fallback is a post-redraw DOM pass that rewrites
-label text. This must be spiked in the first implementation step, before
-anything is built on top of it.
+- `TimeStep.getLabelMinor` honours a function, so the hook works.
+- The callback receives a **moment**, not a `Date` (hence `MomentLike` above).
+- `Graph2d.setOptions` always runs vis's option validator, whose schema permits
+  only an object at `format.minorLabels`. Passing a function renders correctly
+  but logs a spurious "Errors have been found in the supplied options object."
+  on every redraw. The formatter is therefore applied through
+  `Core.prototype.setOptions` — the same code path without the validator,
+  reachable because `Graph2d.prototype` is itself a `Core` instance.
 
 ## Block schema
 
