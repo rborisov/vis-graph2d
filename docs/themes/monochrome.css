@@ -1,0 +1,12 @@
+/* Monochrome — print-friendly. Series differ by dash pattern, not colour. */
+.graph2d-plugin [class*='vis-graph-group'] {
+  stroke: var(--text-normal);
+  fill: var(--text-normal);
+}
+
+.graph2d-plugin .vis-graph-group1 .vis-line { stroke-dasharray: 6 3; }
+.graph2d-plugin .vis-graph-group2 .vis-line { stroke-dasharray: 2 2; }
+.graph2d-plugin .vis-graph-group3 .vis-line { stroke-dasharray: 8 2 2 2; }
+.graph2d-plugin .vis-graph-group4 .vis-line { stroke-dasharray: 1 3; }
+
+.graph2d-plugin .vis-fill { fill-opacity: 0.08; }

@@ -1,0 +1,10 @@
+/* Soft pastel — muted fills, thin strokes. Paste into a CSS snippet. */
+.graph2d-plugin .vis-graph-group0 { stroke: #7aa2f7; fill: #7aa2f7; }
+.graph2d-plugin .vis-graph-group1 { stroke: #f7768e; fill: #f7768e; }
+.graph2d-plugin .vis-graph-group2 { stroke: #9ece6a; fill: #9ece6a; }
+.graph2d-plugin .vis-graph-group3 { stroke: #e0af68; fill: #e0af68; }
+.graph2d-plugin .vis-graph-group4 { stroke: #bb9af7; fill: #bb9af7; }
+
+.graph2d-plugin .vis-line { stroke-width: 1.5px; }
+.graph2d-plugin .vis-fill { fill-opacity: 0.15; }
+.graph2d-plugin .vis-point { fill-opacity: 0.9; }

@@ -1,0 +1,11 @@
+/* Bold contrast — thick strokes, saturated colours, large points. */
+.graph2d-plugin .vis-graph-group0 { stroke: #2563eb; fill: #2563eb; }
+.graph2d-plugin .vis-graph-group1 { stroke: #dc2626; fill: #dc2626; }
+.graph2d-plugin .vis-graph-group2 { stroke: #16a34a; fill: #16a34a; }
+.graph2d-plugin .vis-graph-group3 { stroke: #ea580c; fill: #ea580c; }
+.graph2d-plugin .vis-graph-group4 { stroke: #7c3aed; fill: #7c3aed; }
+
+.graph2d-plugin .vis-line { stroke-width: 3px; }
+.graph2d-plugin .vis-fill { fill-opacity: 0.25; }
+.graph2d-plugin .vis-point { r: 4; }
+.graph2d-plugin .vis-time-axis .vis-text { font-weight: 600; }

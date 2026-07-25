@@ -35,3 +35,43 @@
 .g2d-export-width {
   width: 1200px;
 }
+
+/* vis assigns .vis-graph-group0..9 to groups that set no colour of their
+   own. Restyling them against Obsidian's variables keeps default charts
+   legible in both light and dark themes. */
+.graph2d-plugin .vis-graph-group0 { stroke: var(--color-accent); fill: var(--color-accent); }
+.graph2d-plugin .vis-graph-group1 { stroke: var(--color-red); fill: var(--color-red); }
+.graph2d-plugin .vis-graph-group2 { stroke: var(--color-green); fill: var(--color-green); }
+.graph2d-plugin .vis-graph-group3 { stroke: var(--color-orange); fill: var(--color-orange); }
+.graph2d-plugin .vis-graph-group4 { stroke: var(--color-purple); fill: var(--color-purple); }
+.graph2d-plugin .vis-graph-group5 { stroke: var(--color-cyan); fill: var(--color-cyan); }
+.graph2d-plugin .vis-graph-group6 { stroke: var(--color-yellow); fill: var(--color-yellow); }
+.graph2d-plugin .vis-graph-group7 { stroke: var(--color-pink); fill: var(--color-pink); }
+.graph2d-plugin .vis-graph-group8 { stroke: var(--color-blue); fill: var(--color-blue); }
+.graph2d-plugin .vis-graph-group9 { stroke: var(--text-muted); fill: var(--text-muted); }
+
+/* Axis, grid, and legend chrome follow the active Obsidian theme. */
+.graph2d-plugin .vis-time-axis .vis-text,
+.graph2d-plugin .vis-data-axis .vis-y-axis .vis-text {
+  color: var(--text-muted);
+}
+
+.graph2d-plugin .vis-time-axis .vis-grid.vis-minor,
+.graph2d-plugin .vis-data-axis .vis-grid.vis-horizontal {
+  border-color: var(--background-modifier-border);
+}
+
+.graph2d-plugin .vis-data-axis .vis-title {
+  color: var(--text-normal);
+}
+
+.graph2d-plugin .vis-legend {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+}
+
+.graph2d-plugin .vis-panel {
+  border-color: var(--background-modifier-border);
+}
