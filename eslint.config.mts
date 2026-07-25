@@ -23,6 +23,19 @@ export default tseslint.config(
 		files: ["**/*.json"],
 		rules: { "obsidianmd/no-plugin-as-component": "off" },
 	},
+	{
+		// Test files run under Node via vitest and are never bundled into
+		// main.js, so Node built-ins (reading docs/examples off disk) and Node
+		// globals (__dirname) are legitimate here even though the plugin
+		// itself must avoid them for mobile compatibility.
+		files: ["**/*.test.ts"],
+		languageOptions: {
+			globals: {
+				...globals.node,
+			},
+		},
+		rules: { "import/no-nodejs-modules": "off" },
+	},
 	globalIgnores([
 		"node_modules",
 		"dist",
