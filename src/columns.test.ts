@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { expandColumns } from './columns';
-import type { RawBlock } from './types';
+import type { RawBlock, RawGroup } from './types';
 
 function block(partial: Partial<RawBlock>): RawBlock {
   return { items: [], options: {}, ...partial };
+}
+
+// Simulates a group as it actually arrives at runtime: parsed from
+// YAML/JSON as `unknown` and cast to RawGroup, so a malformed "x" or "y"
+// (wrong type) can appear despite RawGroup's compile-time field types.
+function malformedGroup(partial: Record<string, unknown>): RawGroup {
+  return partial as unknown as RawGroup;
 }
 
 describe('expandColumns', () => {
@@ -77,5 +84,57 @@ describe('expandColumns', () => {
     expect(() =>
       expandColumns(block({ groups: [{ id: 'a', y: [1, 2] }] }))
     ).toThrow('Group "a" has a "y" column but no "x" column.');
+  });
+
+  it('ignores a group whose x column is present but y is absent', () => {
+    const result = expandColumns(
+      block({ x: [1, 2], groups: [{ id: 'a', x: [1, 2] }] })
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('throws when a group y column is a string', () => {
+    expect(() =>
+      expandColumns(
+        block({ x: [1, 2], groups: [malformedGroup({ id: 'a', y: 'abc' })] })
+      )
+    ).toThrow('Group "a" has a "y" column that is not a list of values.');
+  });
+
+  it('throws when a group y column is a number', () => {
+    expect(() =>
+      expandColumns(
+        block({ x: [1, 2], groups: [malformedGroup({ id: 'a', y: 5 })] })
+      )
+    ).toThrow('Group "a" has a "y" column that is not a list of values.');
+  });
+
+  it('throws when a group y column is null', () => {
+    expect(() =>
+      expandColumns(
+        block({ x: [1, 2], groups: [malformedGroup({ id: 'a', y: null })] })
+      )
+    ).toThrow('Group "a" has a "y" column that is not a list of values.');
+  });
+
+  it('throws when a group x override is not a list, even with a valid block-level x', () => {
+    expect(() =>
+      expandColumns(
+        block({
+          x: [1, 2],
+          groups: [malformedGroup({ id: 'a', x: 'nope', y: [10, 20] })],
+        })
+      )
+    ).toThrow('Group "a" has an "x" column that is not a list of values.');
+  });
+
+  it('throws when a group x override is not a list and there is no block-level x', () => {
+    expect(() =>
+      expandColumns(
+        block({
+          groups: [malformedGroup({ id: 'a', x: 'nope', y: [10, 20] })],
+        })
+      )
+    ).toThrow('Group "a" has an "x" column that is not a list of values.');
   });
 });

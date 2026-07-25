@@ -11,7 +11,22 @@ export function expandColumns(block: RawBlock): RawPoint[] {
   const points: RawPoint[] = [...block.items];
 
   for (const group of block.groups ?? []) {
-    if (!Array.isArray(group.y)) continue;
+    if (group.y === undefined) continue;
+
+    // Strict parsing: a "y" (or "x" override) that is present but the wrong
+    // type is a user mistake and must render an inline error, never be
+    // silently dropped or silently substituted with different data. Absent
+    // is fine (a group may exist purely for styling); wrong-type is not.
+    if (!Array.isArray(group.y)) {
+      throw new Error(
+        `Group "${String(group.id)}" has a "y" column that is not a list of values.`
+      );
+    }
+    if (group.x !== undefined && !Array.isArray(group.x)) {
+      throw new Error(
+        `Group "${String(group.id)}" has an "x" column that is not a list of values.`
+      );
+    }
 
     const xs = Array.isArray(group.x) ? group.x : block.x;
     if (xs === undefined) {
