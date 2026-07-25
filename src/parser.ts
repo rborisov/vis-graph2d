@@ -39,15 +39,12 @@ export function parseBlock(source: string): RawBlock {
     if (obj.data !== undefined && typeof obj.data !== 'string') {
       throw new Error('Block "data" must be a file path string.');
     }
-    if (
-      obj.options !== undefined &&
-      !(typeof obj.options === 'object' && obj.options !== null)
-    ) {
+    if (obj.options !== undefined && !isPlainObject(obj.options)) {
       throw new Error('Block "options" must be a settings object.');
     }
 
     const groups = Array.isArray(obj.groups)
-      ? (obj.groups as unknown[]).filter(isObject).map((g) => g as RawGroup)
+      ? validateGroups(obj.groups as unknown[])
       : undefined;
     // An explicit `items` array is a deliberate declaration of intent, even
     // when it is (or normalizes to) empty, so it alone satisfies validity.
@@ -72,10 +69,7 @@ export function parseBlock(source: string): RawBlock {
     return {
       items,
       groups,
-      options:
-        typeof obj.options === 'object' && obj.options !== null
-          ? (obj.options as BlockOptions)
-          : {},
+      options: isPlainObject(obj.options) ? (obj.options as BlockOptions) : {},
       x,
       data,
     };
@@ -87,9 +81,62 @@ export function parseBlock(source: string): RawBlock {
 }
 
 function toPoints(value: unknown[]): RawPoint[] {
-  return value.filter(isObject).map((v) => v as RawPoint);
+  return value.map((v, index) => {
+    if (!isObject(v)) {
+      throw new Error(`Item ${index} must be an object with "x" and "y".`);
+    }
+    return v as RawPoint;
+  });
+}
+
+/**
+ * Type-checks each group entry (STRICT: a present-but-wrong-typed field
+ * throws a message naming it, same rule as block-level fields). Non-object
+ * entries (e.g. a stray string or null in the YAML list) are filtered out
+ * silently, matching how the groups array itself is filtered elsewhere --
+ * only entries that are objects get their fields validated.
+ */
+function validateGroups(groups: unknown[]): RawGroup[] {
+  const result: RawGroup[] = [];
+  groups.forEach((raw, index) => {
+    if (isObject(raw)) result.push(validateGroup(raw, index));
+  });
+  return result;
+}
+
+function validateGroup(raw: Record<string, unknown>, index: number): RawGroup {
+  // id has no valid fallback label to use in its own error -- name the
+  // group by its array position instead. Every check after this one can
+  // safely use the id, since it's now known to be a string or number.
+  if (raw.id === undefined) {
+    throw new Error(`Group ${index} is missing an "id".`);
+  }
+  if (typeof raw.id !== 'string' && typeof raw.id !== 'number') {
+    throw new Error(`Group ${index} has an "id" that must be a string or number.`);
+  }
+  const label = String(raw.id);
+
+  if (raw.data !== undefined && typeof raw.data !== 'string') {
+    throw new Error(`Group "${label}"'s "data" must be a string.`);
+  }
+  if (raw.options !== undefined && !isPlainObject(raw.options)) {
+    throw new Error(`Group "${label}"'s "options" must be a settings object.`);
+  }
+  if (raw.visible !== undefined && typeof raw.visible !== 'boolean') {
+    throw new Error(`Group "${label}"'s "visible" must be true or false.`);
+  }
+  if (raw.content !== undefined && typeof raw.content !== 'string') {
+    throw new Error(`Group "${label}"'s "content" must be a string.`);
+  }
+
+  return raw as RawGroup;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/** An object, but not an array -- STRICT validation rejects arrays for options fields (typeof [] === 'object'). */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -58,13 +58,47 @@ export function parseDataFile(path: string, content: string): RawPoint[] {
     case 'csv':
       return parseCsv(path, content);
     case 'json':
-      return asRowArray(path, JSON.parse(content));
+      return asRowArray(path, parseJson(path, content));
     case 'yaml':
     case 'yml':
-      return asRowArray(path, yaml.load(content));
+      return asRowArray(path, parseYaml(path, content));
     default:
       throw new Error(`Data file "${path}" must be .csv, .json, .yaml, or .yml.`);
   }
+}
+
+/**
+ * Wraps JSON.parse so a syntax error names the file instead of surfacing
+ * the engine's own message unwrapped (e.g. "Expected property name or '}'
+ * in JSON at position 1") -- every other parseDataFile failure names the
+ * file; this one previously did not.
+ */
+function parseJson(path: string, content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    throw new Error(`Data file "${path}" is not valid JSON: ${firstLine(e)}`);
+  }
+}
+
+/**
+ * Wraps yaml.load so a syntax error names the file and stays one line.
+ * js-yaml's own error is a multi-line dump (message, blank line, then a
+ * source snippet with a caret pointer), which reads fine in a terminal but
+ * is unreadable dropped into a one-line inline error box in a note.
+ */
+function parseYaml(path: string, content: string): unknown {
+  try {
+    return yaml.load(content);
+  } catch (e) {
+    throw new Error(`Data file "${path}" is not valid YAML: ${firstLine(e)}`);
+  }
+}
+
+/** First line of an error's message, so a multi-line engine dump collapses to one readable line. */
+function firstLine(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  return message.split('\n')[0]!.trim();
 }
 
 function asRowArray(path: string, parsed: unknown): RawPoint[] {
@@ -85,7 +119,7 @@ function parseCsv(path: string, content: string): RawPoint[] {
   const yIndex = header.indexOf('y');
   const groupIndex = header.indexOf('group');
   if (xIndex === -1 || yIndex === -1) {
-    throw new Error(`Data file "${path}" needs "x" and "y" header columns.`);
+    throw new Error(`Data file "${path}" must have "x" and "y" header columns.`);
   }
 
   const rows: RawPoint[] = [];

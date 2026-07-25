@@ -204,6 +204,79 @@ items:
   - { x: 3, y: 4, group: samples }
 ```
 
+## Point labels
+
+`label: { content, xOffset, yOffset, className }` attaches a text label to
+one point. Offsets are in pixels; `className` lets a CSS snippet target
+this one label without affecting the rest of the series.
+
+```vis-graph2d
+options:
+  xAxis: numeric
+groups:
+  - id: sales
+    content: Sales
+items:
+  - { x: 1, y: 10, group: sales }
+  - { x: 2, y: 18, group: sales, label: { content: "Peak", xOffset: 4, yOffset: -16, className: peak-label } }
+  - { x: 3, y: 12, group: sales }
+```
+
+```css
+.graph2d-plugin .peak-label {
+  font-weight: bold;
+  fill: #e11d48;
+}
+```
+
+## sampling and sort on a large series
+
+`sampling: true` downsamples a dense line series so it stays smooth to
+pan and zoom; `sort: true` sorts items by `x` before drawing even when
+they arrive out of order, as this hand-authored 30-point series
+deliberately does (both are block-level options).
+
+```vis-graph2d
+options:
+  xAxis: numeric
+  sampling: true
+  sort: true
+groups:
+  - id: readings
+    content: Readings
+items:
+  - { x: 22, y: 52, group: readings }
+  - { x: 6, y: 42, group: readings }
+  - { x: 16, y: 51, group: readings }
+  - { x: 30, y: 48, group: readings }
+  - { x: 8, y: 55, group: readings }
+  - { x: 29, y: 51, group: readings }
+  - { x: 10, y: 49, group: readings }
+  - { x: 1, y: 57, group: readings }
+  - { x: 14, y: 57, group: readings }
+  - { x: 9, y: 52, group: readings }
+  - { x: 28, y: 54, group: readings }
+  - { x: 23, y: 49, group: readings }
+  - { x: 27, y: 57, group: readings }
+  - { x: 15, y: 54, group: readings }
+  - { x: 24, y: 46, group: readings }
+  - { x: 25, y: 43, group: readings }
+  - { x: 20, y: 58, group: readings }
+  - { x: 7, y: 58, group: readings }
+  - { x: 17, y: 48, group: readings }
+  - { x: 26, y: 40, group: readings }
+  - { x: 19, y: 42, group: readings }
+  - { x: 12, y: 43, group: readings }
+  - { x: 4, y: 48, group: readings }
+  - { x: 18, y: 45, group: readings }
+  - { x: 3, y: 51, group: readings }
+  - { x: 2, y: 54, group: readings }
+  - { x: 21, y: 55, group: readings }
+  - { x: 13, y: 40, group: readings }
+  - { x: 5, y: 45, group: readings }
+  - { x: 11, y: 46, group: readings }
+```
+
 ## Mixed types in one chart
 
 A bar group and a line group can share one chart, for example actuals

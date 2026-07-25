@@ -57,6 +57,17 @@ export async function capturePng(el: HTMLElement): Promise<Capture> {
       pixelRatio,
       cacheBust: true,
       height: captureHeight,
+      // Without this, html-to-image walks every stylesheet looking for
+      // @font-face rules and fetches each one to embed it (see
+      // capturePngWithoutLeakingFontStyles below) -- including a remote
+      // font URL, which would be a network call from inside an otherwise
+      // fully offline plugin. skipFonts skips that walk entirely, so the
+      // export path can never issue one. This makes the font-leak cleanup
+      // below mostly a no-op in practice (nothing gets embedded to leak),
+      // but it stays in place as a safety net: it is keyed off whatever
+      // <style> elements actually appear, not off this flag, so it still
+      // catches anything unexpected.
+      skipFonts: true,
     });
     const naturalHeight = await getImageNaturalHeight(dataUrl);
     const width = el.clientWidth;
@@ -74,12 +85,16 @@ export async function rasterize(
   sourcePath: string,
   blockSource: string
 ): Promise<void> {
+  // Declared outside the try so the catch block below can reach it: on
+  // failure we still need to undo the export-only width class it carries
+  // (see the catch block).
+  let container: HTMLElement | null = null;
   try {
     // Capture the graph's own container, not `el` itself. renderGraph2d()
     // widens the container beyond el's ambient (pubobs-constrained) width for
     // the export path — capturing el would clip that overflow instead of
     // actually rendering it wider.
-    const container = el.querySelector<HTMLElement>('.graph2d-plugin');
+    container = el.querySelector<HTMLElement>('.graph2d-plugin');
     if (!container) throw new Error('graph2d container not found');
 
     // vis-timeline's own auto-height computation reads its center panel's
@@ -116,8 +131,14 @@ export async function rasterize(
     await new Promise((resolve) => window.setTimeout(resolve, 50));
   } catch (e) {
     // Rasterization is a nicety on top of an already-working interactive
-    // widget — never let a failure here break the note. Leave `graph`
-    // mounted and `el` untouched.
+    // widget — never let a failure here break the note. `graph` stays
+    // mounted and `el`'s content is untouched (not emptied/replaced). The
+    // one exception is the export-only `g2d-export-width` class
+    // renderGraph2d() added for this capture attempt (a fixed 1200px, sized
+    // for an offscreen pubobs render, not for the note itself) — left in
+    // place, a failed export would leave the still-live interactive chart
+    // overflowing the note at that width, so it comes off here.
+    if (container) container.removeClass('g2d-export-width');
     console.error('vis-graph2d: PNG rasterization failed, leaving interactive widget', e);
   }
 }

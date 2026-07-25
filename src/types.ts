@@ -21,10 +21,19 @@ export interface RawPoint {
   [key: string]: unknown;
 }
 
-/** Shading configuration in friendly form. */
+/**
+ * Shading configuration in friendly form. `below`/`above` are relative to
+ * the axis, not an arbitrary threshold value -- vis's `shaded.orientation`
+ * has no such concept, so a number here is a user mistake, not a value to
+ * honor. `below`/`above` are typed `unknown` (not `boolean`) because that
+ * mistake is exactly what compileFill's runtime check must catch; a
+ * `boolean` type would let a wrongly-typed author value through silently.
+ */
 export type FillSpec =
   | boolean
-  | { below?: number; above?: number; to?: string | number };
+  | 'below'
+  | 'above'
+  | { below?: unknown; above?: unknown; to?: string | number };
 
 /** A series as written by the user. Friendly fields plus raw vis pass-through. */
 export interface RawGroup {

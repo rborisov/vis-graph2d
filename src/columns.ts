@@ -18,14 +18,10 @@ export function expandColumns(block: RawBlock): RawPoint[] {
     // silently dropped or silently substituted with different data. Absent
     // is fine (a group may exist purely for styling); wrong-type is not.
     if (!Array.isArray(group.y)) {
-      throw new Error(
-        `Group "${String(group.id)}" has a "y" column that is not a list of values.`
-      );
+      throw new Error(`Group "${String(group.id)}"'s "y" must be a list of values.`);
     }
     if (group.x !== undefined && !Array.isArray(group.x)) {
-      throw new Error(
-        `Group "${String(group.id)}" has an "x" column that is not a list of values.`
-      );
+      throw new Error(`Group "${String(group.id)}"'s "x" must be a list of values.`);
     }
 
     const xs = Array.isArray(group.x) ? group.x : block.x;

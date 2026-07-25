@@ -31,6 +31,13 @@ export interface XScale {
   readonly overridesLabels: boolean;
   /** Author value -> internal epoch milliseconds. */
   toInternal(value: unknown): number;
+  /**
+   * Author-unit DURATION (e.g. `zoomMin`/`zoomMax`) -> internal-ms duration.
+   * Distinct from toInternal: a duration has no anchor offset to subtract,
+   * only a step to divide out (numeric) or a fixed one-day-per-slot rate
+   * (category).
+   */
+  toInternalDuration(value: unknown): number;
   /** Internal position -> the text shown on the axis. */
   formatLabel(value: MomentLike): string;
   /** Extra vis options this scale needs (label visibility, fixed step). */
@@ -47,7 +54,8 @@ export function createXScale(mode: XAxisMode, values: unknown[]): XScale {
       return new CategoryScale(values);
     default:
       throw new Error(
-        `Unknown xAxis mode "${String(mode)}". Use "time", "numeric", or "category".`
+        `Block has an invalid "xAxis" value: "${String(mode)}". ` +
+          'Valid values are "time", "numeric", and "category".'
       );
   }
 }
@@ -64,6 +72,13 @@ class TimeScale implements XScale {
       throw new Error(`"${String(value)}" is not a valid date.`);
     }
     return parsed;
+  }
+
+  toInternalDuration(value: unknown): number {
+    // Never called: overridesLabels is false, so the normalizer forwards
+    // zoomMin/zoomMax raw, exactly like every other Graph2d option.
+    if (typeof value === 'number') return value;
+    throw new Error(`"${String(value)}" is not a number of milliseconds.`);
   }
 
   formatLabel(): string {
@@ -107,6 +122,14 @@ class NumericScale implements XScale {
     const n = toNumber(value);
     if (n === undefined) throw new Error(`"${String(value)}" is not a number.`);
     return ((n - this.anchor) / this.step) * MS_PER_DAY;
+  }
+
+  toInternalDuration(value: unknown): number {
+    const n = toNumber(value);
+    if (n === undefined) throw new Error(`"${String(value)}" is not a number.`);
+    // No anchor: a duration is a difference, so the anchor offset that
+    // toInternal subtracts for a position would cancel out anyway.
+    return (n / this.step) * MS_PER_DAY;
   }
 
   formatLabel(value: MomentLike): string {
@@ -154,6 +177,15 @@ class CategoryScale implements XScale {
       throw new Error(`unknown category "${name}".`);
     }
     return index * MS_PER_DAY;
+  }
+
+  toInternalDuration(value: unknown): number {
+    const n = toNumber(value);
+    if (n === undefined) throw new Error(`"${String(value)}" is not a number.`);
+    // Every category is exactly one internal day apart, so a duration of N
+    // categories is simply N days -- there is no step or anchor to divide
+    // or subtract, unlike the numeric scale.
+    return n * MS_PER_DAY;
   }
 
   formatLabel(value: MomentLike): string {

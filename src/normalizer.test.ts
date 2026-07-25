@@ -121,15 +121,19 @@ describe('normalize', () => {
     expect(chart.visOptions.legend).toBe(false);
   });
 
+  // CONVERTED for FIX 6: unifies the predicate voice with the rest of the
+  // codebase's "must be X" wrong-type messages, and (per the same fix)
+  // distinguishes a present-but-wrong-type "y" from one that is simply
+  // absent, rather than quoting back the literal string "undefined".
   it('throws for a non-numeric y value naming the row', () => {
     expect(() =>
       chartFrom('items:\n  - { x: "2026-01-01", y: "abc" }')
-    ).toThrow('Item 0 has a non-numeric "y" value: "abc"');
+    ).toThrow('Item 0\'s "y" must be a number (got "abc")');
   });
 
-  it('throws for a missing y value naming the row', () => {
+  it('throws for a missing y value naming the row, without quoting "undefined"', () => {
     expect(() => chartFrom('items:\n  - { x: "2026-01-01" }')).toThrow(
-      'Item 0 has a non-numeric "y" value'
+      'Item 0 is missing "y".'
     );
   });
 
@@ -149,7 +153,7 @@ describe('normalize', () => {
   it('throws for an unknown xAxis mode', () => {
     expect(() =>
       chartFrom('options: { xAxis: polar }\nitems:\n  - { x: 1, y: 1 }')
-    ).toThrow('Unknown xAxis mode "polar"');
+    ).toThrow('Block has an invalid "xAxis" value: "polar"');
   });
 
   it('reports the failing row index for a bad x value', () => {
@@ -191,6 +195,103 @@ describe('normalize', () => {
     expect(() =>
       chartFrom('groups:\n  - id: 1\n  - id: "1"\nitems:\n  - { x: "2026-01-01", y: 1 }')
     ).toThrow('is declared more than once');
+  });
+
+  // FIX 1: start/end/min/max are author-unit POSITIONS. Left unmapped, vis
+  // reads them as raw epoch milliseconds while the chart itself lives on the
+  // warped internal axis (one chosen step == one internal day), collapsing
+  // the visible window to a ~10ms sliver. They must be routed through the
+  // same scale.toInternal() used for item x/end values.
+  describe('start/end/min/max axis-range options (FIX 1)', () => {
+    // x: [1,3,5,7,9] -> span 8 -> chooseNiceStep(8) == 1 -> anchor == floor(1/1)*1 == 1.
+    const source =
+      'options: { xAxis: numeric, start: 1, end: 5 }\n' +
+      'items:\n' +
+      '  - { x: 1, y: 1 }\n  - { x: 3, y: 2 }\n  - { x: 5, y: 3 }\n  - { x: 7, y: 4 }\n  - { x: 9, y: 5 }';
+
+    it('maps numeric start/end through the scale instead of forwarding raw', () => {
+      const chart = chartFrom(source);
+      expect(chart.visOptions.start).toBeInstanceOf(Date);
+      expect(chart.visOptions.end).toBeInstanceOf(Date);
+      expect((chart.visOptions.start as Date).getTime()).toBe(chart.scale.toInternal(1));
+      expect((chart.visOptions.end as Date).getTime()).toBe(chart.scale.toInternal(5));
+      // Sanity: this must be a multi-day span, not a ~10ms sliver.
+      const spanMs =
+        (chart.visOptions.end as Date).getTime() - (chart.visOptions.start as Date).getTime();
+      expect(spanMs).toBe(4 * 86400000);
+    });
+
+    it('maps numeric min/max through the scale instead of forwarding raw', () => {
+      const chart = chartFrom(
+        'options: { xAxis: numeric, min: 0, max: 10 }\n' +
+          'items:\n  - { x: 1, y: 1 }\n  - { x: 3, y: 2 }\n  - { x: 5, y: 3 }\n  - { x: 7, y: 4 }\n  - { x: 9, y: 5 }'
+      );
+      expect(chart.visOptions.min).toBeInstanceOf(Date);
+      expect(chart.visOptions.max).toBeInstanceOf(Date);
+      expect((chart.visOptions.min as Date).getTime()).toBe(chart.scale.toInternal(0));
+      expect((chart.visOptions.max as Date).getTime()).toBe(chart.scale.toInternal(10));
+    });
+
+    it('maps a category start/end through the scale instead of throwing "Invalid start NaN"', () => {
+      const chart = chartFrom(
+        'options: { xAxis: category, start: Mon, end: Wed }\n' +
+          'items:\n  - { x: Mon, y: 1 }\n  - { x: Tue, y: 2 }\n  - { x: Wed, y: 3 }'
+      );
+      expect(chart.visOptions.start).toBeInstanceOf(Date);
+      expect(chart.visOptions.end).toBeInstanceOf(Date);
+      expect((chart.visOptions.start as Date).getTime()).toBe(chart.scale.toInternal('Mon'));
+      expect((chart.visOptions.end as Date).getTime()).toBe(chart.scale.toInternal('Wed'));
+    });
+
+    it('maps a category min/max through the scale', () => {
+      const chart = chartFrom(
+        'options: { xAxis: category, min: Mon, max: Wed }\n' +
+          'items:\n  - { x: Mon, y: 1 }\n  - { x: Tue, y: 2 }\n  - { x: Wed, y: 3 }'
+      );
+      expect((chart.visOptions.min as Date).getTime()).toBe(chart.scale.toInternal('Mon'));
+      expect((chart.visOptions.max as Date).getTime()).toBe(chart.scale.toInternal('Wed'));
+    });
+
+    it('throws a clear, option-naming error for an unmappable category start', () => {
+      expect(() =>
+        chartFrom(
+          'options: { xAxis: category, start: Friday }\n' +
+            'items:\n  - { x: Mon, y: 1 }\n  - { x: Tue, y: 2 }'
+        )
+      ).toThrow(/"start"/);
+    });
+
+    it('leaves start/end/min/max untouched on the time axis (unchanged behaviour)', () => {
+      const chart = chartFrom(
+        'options: { start: "2026-01-01", end: "2026-01-08" }\n' +
+          'items:\n  - { x: "2026-01-01", y: 1 }\n  - { x: "2026-01-08", y: 2 }'
+      );
+      expect(chart.visOptions.start).toBe('2026-01-01');
+      expect(chart.visOptions.end).toBe('2026-01-08');
+    });
+
+    // zoomMin/zoomMax are DURATIONS in the same warped space (one chosen
+    // step == one internal day), not positions -- scaling them requires
+    // dividing by the step rather than subtracting the anchor. Conclusion
+    // recorded in final-fixes-report.md.
+    it('scales numeric zoomMin/zoomMax as durations (divide by step), not positions', () => {
+      const chart = chartFrom(
+        'options: { xAxis: numeric, zoomMin: 2, zoomMax: 6 }\n' +
+          'items:\n  - { x: 1, y: 1 }\n  - { x: 3, y: 2 }\n  - { x: 5, y: 3 }\n  - { x: 7, y: 4 }\n  - { x: 9, y: 5 }'
+      );
+      // step == 1 for this data (see above), so 2 author-units == 2 internal days.
+      expect(chart.visOptions.zoomMin).toBe(2 * 86400000);
+      expect(chart.visOptions.zoomMax).toBe(6 * 86400000);
+      expect(typeof chart.visOptions.zoomMin).toBe('number');
+    });
+
+    it('scales category zoomMin/zoomMax as durations (one category == one internal day)', () => {
+      const chart = chartFrom(
+        'options: { xAxis: category, zoomMin: 2 }\n' +
+          'items:\n  - { x: Mon, y: 1 }\n  - { x: Tue, y: 2 }\n  - { x: Wed, y: 3 }'
+      );
+      expect(chart.visOptions.zoomMin).toBe(2 * 86400000);
+    });
   });
 
   // Same requirement for category mode: indices are assigned in

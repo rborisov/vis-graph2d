@@ -72,15 +72,30 @@ export function compileGroup(raw: RawGroup): VisGroup {
   return group;
 }
 
+// Precedence when several keys could apply at once: "to" wins, then
+// "below", then "above" (documented in the README).
 function compileFill(fill: FillSpec, id: string | number): Record<string, unknown> {
   if (fill === true) return { orientation: 'zero' };
   if (fill === false) return { enabled: false };
+  if (fill === 'below') return { orientation: 'bottom' };
+  if (fill === 'above') return { orientation: 'top' };
   if (fill.to !== undefined) return { groupId: fill.to };
+  // vis's shaded.orientation shades relative to the axis (zero, top, or
+  // bottom) -- it has no concept of an arbitrary threshold value, so a
+  // number here can never do what it looks like it does: `below: 0` and
+  // `below: 500` would compile to the exact same thing. Rejecting it is
+  // more honest than silently discarding the number.
+  if (typeof fill.below === 'number' || typeof fill.above === 'number') {
+    const key = typeof fill.below === 'number' ? 'below' : 'above';
+    throw new Error(
+      `Group "${String(id)}"'s "fill.${key}" must not be a number: shading is relative to ` +
+        `the axis, not an arbitrary value. Use fill: "${key}" (or fill: { ${key}: true }).`
+    );
+  }
   if (fill.below !== undefined) return { orientation: 'bottom' };
   if (fill.above !== undefined) return { orientation: 'top' };
   throw new Error(
-    `Group "${String(id)}" has a "fill" object with no recognized key. ` +
-      'Use "to", "below", or "above".'
+    `Group "${String(id)}"'s "fill" must have a "to", "below", or "above" key.`
   );
 }
 
@@ -92,20 +107,16 @@ function compileStyle(raw: RawGroup): string | undefined {
   }
   if (raw.width !== undefined) {
     if (typeof raw.width !== 'number' || !Number.isFinite(raw.width)) {
-      throw new Error(`Group "${String(raw.id)}" has a "width" value that is not a number.`);
+      throw new Error(`Group "${String(raw.id)}"'s "width" must be a number.`);
     }
     declarations.push(`stroke-width:${raw.width}`);
   }
   if (raw.dashes !== undefined) {
     if (!Array.isArray(raw.dashes)) {
-      throw new Error(
-        `Group "${String(raw.id)}" has a "dashes" value that is not a list of numbers.`
-      );
+      throw new Error(`Group "${String(raw.id)}"'s "dashes" must be a list of numbers.`);
     }
     if (raw.dashes.some((d) => typeof d !== 'number' || !Number.isFinite(d))) {
-      throw new Error(
-        `Group "${String(raw.id)}" has a "dashes" value with a non-numeric entry.`
-      );
+      throw new Error(`Group "${String(raw.id)}"'s "dashes" must contain only numbers.`);
     }
     declarations.push(`stroke-dasharray:${raw.dashes.join(' ')}`);
   }

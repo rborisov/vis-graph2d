@@ -84,9 +84,29 @@ items:
   - { x: 3, y: 5, group: a }
 ```
 
-## fill: {below}
+## fill: below
 
-Shades from the line down to the bottom of the axis.
+Shades from the line down to the bottom of the axis. `below`/`above` are
+relative to the axis, not an arbitrary threshold — there is no numeric
+form (`fill: { below: 500 }` throws; see the note below).
+
+```vis-graph2d
+options:
+  xAxis: numeric
+groups:
+  - id: a
+    content: A
+    fill: below
+items:
+  - { x: 1, y: 4, group: a }
+  - { x: 2, y: 7, group: a }
+  - { x: 3, y: 5, group: a }
+```
+
+## fill: above
+
+Shades from the line up to the top of the axis. The equivalent object form
+is `fill: { above: true }`.
 
 ```vis-graph2d
 options:
@@ -95,30 +115,23 @@ groups:
   - id: a
     content: A
     fill:
-      below: 0
+      above: true
 items:
   - { x: 1, y: 4, group: a }
   - { x: 2, y: 7, group: a }
   - { x: 3, y: 5, group: a }
 ```
 
-## fill: {above}
-
-Shades from the line up to the top of the axis.
-
-```vis-graph2d
-options:
-  xAxis: numeric
-groups:
-  - id: a
-    content: A
-    fill:
-      above: 0
-items:
-  - { x: 1, y: 4, group: a }
-  - { x: 2, y: 7, group: a }
-  - { x: 3, y: 5, group: a }
-```
+> **Why no numeric threshold.** vis's underlying `shaded.orientation` only
+> supports shading to the zero line, the axis top, or the axis bottom —
+> there is no concept of shading down to an arbitrary value like `20`.
+> Earlier versions of this plugin accepted `fill: { below: 20 }` and
+> silently discarded the `20`, so `below: 0` and `below: 500` rendered
+> identically. That form is now rejected with an error explaining why,
+> instead of quietly ignoring the number.
+>
+> **Precedence**, when a `fill` object could match more than one key:
+> `to` wins over `below`, which wins over `above`.
 
 ## fill: {to: otherGroup}
 

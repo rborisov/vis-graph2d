@@ -115,10 +115,14 @@ groups:
     expect(result.groups![0]!.id).toBe('a');
   });
 
-  it('drops null entries from the items array', () => {
+  // CONVERTED for FIX 4: a null entry in "items" used to be silently
+  // dropped. That's the same silent-drop class STRICT validation exists to
+  // prevent elsewhere (e.g. `items: 5` at the block level already throws),
+  // so a non-object entry -- including null -- now throws instead, naming
+  // its index.
+  it('throws, naming the index, for a null entry in the items array', () => {
     const source = 'items:\n  - { x: 1, y: 2 }\n  - null';
-    const result = parseBlock(source);
-    expect(result.items).toHaveLength(1);
+    expect(() => parseBlock(source)).toThrow('Item 1 must be an object with "x" and "y".');
   });
 
   it('throws when groups holds a non-array value and there is no other data source', () => {
@@ -160,10 +164,17 @@ groups:
     expect(result.groups![0]!.id).toBe('a');
   });
 
-  it('filters out non-object entries in the items array', () => {
+  // CONVERTED for FIX 4: see the null-entry conversion above -- a bare
+  // scalar entry (e.g. a string, or `[1, 2, 3]` at the top level) used to
+  // be silently dropped, yielding an empty chart with no error. It now
+  // throws, naming its index.
+  it('throws, naming the index, for a non-object entry in the items array', () => {
     const source = 'items:\n  - { x: 1, y: 2 }\n  - just a string';
-    const result = parseBlock(source);
-    expect(result.items).toHaveLength(1);
+    expect(() => parseBlock(source)).toThrow('Item 1 must be an object with "x" and "y".');
+  });
+
+  it('throws, naming the index, for a bare top-level array of scalars (FIX 4)', () => {
+    expect(() => parseBlock('[1, 2, 3]')).toThrow('Item 0 must be an object with "x" and "y".');
   });
 
   describe('strict type validation', () => {
@@ -204,19 +215,72 @@ groups:
   });
 
   describe('group-level "data" must be a string (Finding 1)', () => {
-    it('does not treat a numeric group "data" as valid content', () => {
+    // FIX 3 CONVERTS these two: a malformed group-level "data" used to fall
+    // through to the generic "Block must have..." message (the exact
+    // silent-drop class STRICT validation exists to prevent) because
+    // nested RawGroup fields were never type-checked. It now throws a
+    // message naming the group and the field directly, before that generic
+    // check is ever reached.
+    it('names the group and field for a numeric group "data"', () => {
       const source = 'groups:\n  - id: a\n    data: 123';
+      expect(() => parseBlock(source)).toThrow('Group "a"\'s "data" must be a string.');
+    });
+
+    it('names the group and field for a null group "data"', () => {
+      const source = 'groups:\n  - id: a\n    data: null';
+      expect(() => parseBlock(source)).toThrow('Group "a"\'s "data" must be a string.');
+    });
+  });
+
+  describe('group "id" is required and type-checked (FIX 3)', () => {
+    it('throws, naming the position, when a group has no "id" at all', () => {
+      const source = 'groups:\n  - { content: A, y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).toThrow('Group 0 is missing an "id".');
+    });
+
+    it('throws, naming the position, for a non-string non-number "id"', () => {
+      const source = 'groups:\n  - { id: [1, 2], y: [1, 2] }\nx: [1, 2]';
       expect(() => parseBlock(source)).toThrow(
-        'must have "items", "data", or columnar "x"/"y" arrays'
+        'Group 0 has an "id" that must be a string or number.'
       );
     });
 
-    it('does not treat a null group "data" as valid content', () => {
-      const source = 'groups:\n  - id: a\n    data: null';
-      expect(() => parseBlock(source)).toThrow(
-        'must have "items", "data", or columnar "x"/"y" arrays'
-      );
+    it('names the group id (not the position) once it is known to be valid', () => {
+      const source = 'groups:\n  - { id: a, visible: "yes", y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).toThrow('Group "a"\'s "visible" must be true or false.');
     });
+
+    it('reports the correct array position among mixed valid/invalid groups', () => {
+      const source =
+        'groups:\n  - { id: a, y: [1, 2] }\n  - { id: b, content: 5, y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).toThrow('Group "b"\'s "content" must be a string.');
+    });
+
+    it('accepts a numeric id', () => {
+      const source = 'groups:\n  - { id: 1, y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).not.toThrow();
+    });
+
+    it('rejects a non-object "options" on a group', () => {
+      const source = 'groups:\n  - { id: a, options: "nope", y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).toThrow('Group "a"\'s "options" must be a settings object.');
+    });
+
+    it('rejects an array "options" on a group', () => {
+      const source = 'groups:\n  - { id: a, options: [1, 2], y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).toThrow('Group "a"\'s "options" must be a settings object.');
+    });
+
+    it('rejects a non-string "content" on a group', () => {
+      const source = 'groups:\n  - { id: a, content: 5, y: [1, 2] }\nx: [1, 2]';
+      expect(() => parseBlock(source)).toThrow('Group "a"\'s "content" must be a string.');
+    });
+  });
+
+  it('rejects an array "options" at the block level', () => {
+    expect(() => parseBlock('options: [1, 2]\ndata: file.csv')).toThrow(
+      'Block "options" must be a settings object.'
+    );
   });
 
   describe('malformed fields are not silently dropped when "items: []" is present (Finding 2)', () => {

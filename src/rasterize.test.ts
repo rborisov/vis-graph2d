@@ -56,4 +56,37 @@ describe('rasterize', () => {
       errorSpy.mockRestore();
     }
   });
+
+  // FIX 7: renderGraph2d() adds a `g2d-export-width` class (a fixed 1200px,
+  // sized for pubobs's offscreen render) before rasterize() ever runs. If
+  // capture fails *after* the container is found -- unlike the test above,
+  // which fails before touching it -- that class used to survive, leaving
+  // the still-live interactive chart 1200px wide and overflowing the note.
+  it('removes the export-width class from an already-found container when a later step fails', async () => {
+    const removeClassMock = vi.fn<(cls: string) => void>();
+    // A container deliberately missing every DOM method past querySelector
+    // (getBoundingClientRect, querySelectorAll, ...) so settleHeight() fails
+    // immediately with no canvas/DOM support needed, exercising the catch
+    // block's cleanup exactly like a real capture failure would.
+    const container = { removeClass: removeClassMock } as unknown as HTMLElement;
+    const el = {
+      querySelector: () => container,
+      empty: vi.fn<() => void>(),
+      createEl: vi.fn<() => HTMLElement>(),
+    } as unknown as HTMLElement;
+    const graph = fakeGraph();
+    const app = {} as App;
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(
+        rasterize(el, graph, app, 'note.md', 'items: []')
+      ).resolves.toBeUndefined();
+      expect(removeClassMock).toHaveBeenCalledWith('g2d-export-width');
+      // Still never destroyed/replaced -- only the width class comes off.
+      expect(graph.destroy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });

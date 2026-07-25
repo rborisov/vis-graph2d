@@ -8,7 +8,7 @@
 An Obsidian plugin that renders interactive 2D charts in notes from a
 `vis-graph2d` code block, powered by [vis-timeline's Graph2d]
 (https://visjs.github.io/vis-timeline/docs/graph2d/). It is a sibling to the
-existing `vis-timeline` plugin (`/Volumes/docvol/timeline`) and follows its
+existing `vis-timeline` plugin and follows its
 conventions: TypeScript in `src/`, esbuild bundle to `main.js`, vitest for pure
 logic, YAML-first authoring with JSON fallback.
 
@@ -225,8 +225,11 @@ verified manually before release:
 - interpolation: centripetal, chordal, uniform, disabled
 - left axis, right axis, both axes, axis titles and title styling, custom axis
   range, `alignZeros`, axis `icons`
-- legend on/off, all four positions, `excludeFromLegend`, external legend
-  container
+- legend on/off, all four positions, `excludeFromLegend`
+- ~~external legend container~~ — **out of scope.** vis exposes only the
+  imperative `graph2d.getLegend()`; there is no `legendContainer` option to
+  render one into, so this is unreachable by construction and cannot be
+  checked off.
 - group visibility toggling (`groups.visibility`, per-group `visible`)
 - point labels (`label: { content, xOffset, yOffset, className }`)
 - localization, custom initial time range, `sampling` and `sort` on large series

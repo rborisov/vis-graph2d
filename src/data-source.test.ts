@@ -40,15 +40,17 @@ describe('parseDataFile', () => {
     expect(rows[0]).toEqual({ x: 1, y: 10 });
   });
 
+  // CONVERTED for FIX 6: was "needs \"x\" and \"y\" header columns" --
+  // unified with the "must be"/"must have" predicate voice used elsewhere.
   it('throws for CSV missing an x column', () => {
     expect(() => parseDataFile('a.csv', 'time,y\n1,10')).toThrow(
-      'Data file "a.csv" needs "x" and "y" header columns.'
+      'Data file "a.csv" must have "x" and "y" header columns.'
     );
   });
 
   it('throws for CSV missing a y column', () => {
     expect(() => parseDataFile('a.csv', 'x,value\n1,10')).toThrow(
-      'Data file "a.csv" needs "x" and "y" header columns.'
+      'Data file "a.csv" must have "x" and "y" header columns.'
     );
   });
 
@@ -92,6 +94,41 @@ describe('parseDataFile', () => {
     expect(() => parseDataFile('a.csv', 'x,y\n"Jan,10')).toThrow(
       'Data file "a.csv" has an unterminated quote.'
     );
+  });
+
+  // FIX 2: JSON.parse/yaml.load previously escaped unwrapped, surfacing raw
+  // engine messages ("Expected property name or '}' in JSON at position 1")
+  // or, for YAML, a multi-line source-pointer dump -- neither names the
+  // file, and every other parseDataFile failure does.
+  it('names the file in a single line for malformed JSON', () => {
+    expect(() => parseDataFile('a.json', '{ unclosed')).toThrow(/^Data file "a\.json" is not valid JSON: .+$/);
+  });
+
+  it('does not leak the raw JSON engine message unwrapped', () => {
+    try {
+      parseDataFile('a.json', '{ unclosed');
+      throw new Error('expected parseDataFile to throw');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      expect(message.split('\n')).toHaveLength(1);
+      expect(message).toContain('Data file "a.json"');
+    }
+  });
+
+  it('names the file in a single line for malformed YAML', () => {
+    // js-yaml's own error for this is a multi-line dump: message, then a
+    // blank line, then a source-pointer snippet with a caret.
+    const malformed = ': bad : yaml : here';
+    let thrown: unknown;
+    try {
+      parseDataFile('a.yaml', malformed);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    const message = (thrown as Error).message;
+    expect(message).toContain('Data file "a.yaml"');
+    expect(message.split('\n')).toHaveLength(1);
   });
 });
 
@@ -186,6 +223,6 @@ describe('resolveData', () => {
   it('propagates a parse error from the data file', async () => {
     await expect(
       resolveData(block({ data: 'a.csv' }), reader({ 'a.csv': 'time,y\n1,2' }))
-    ).rejects.toThrow('needs "x" and "y" header columns');
+    ).rejects.toThrow('must have "x" and "y" header columns');
   });
 });

@@ -46,16 +46,50 @@ describe('compileGroup', () => {
     });
   });
 
-  it('compiles fill.below to bottom orientation', () => {
-    expect(compileGroup({ id: 'a', fill: { below: 0 } }).options?.shaded).toEqual({
+  // CONVERTED for FIX 5: `fill: { below: <number> }` used to compile
+  // successfully to bottom orientation, silently discarding the number --
+  // `below: 0` and `below: 500` were identical, and vis's shaded.orientation
+  // has no threshold concept to give the number meaning. It's now rejected
+  // with a clear error; the friendly form is the string `fill: below` (or
+  // the object form `fill: { below: true }`).
+  it('compiles fill: "below" (string form) to bottom orientation', () => {
+    expect(compileGroup({ id: 'a', fill: 'below' }).options?.shaded).toEqual({
       orientation: 'bottom',
     });
   });
 
-  it('compiles fill.above to top orientation', () => {
-    expect(compileGroup({ id: 'a', fill: { above: 0 } }).options?.shaded).toEqual({
+  it('compiles fill: "above" (string form) to top orientation', () => {
+    expect(compileGroup({ id: 'a', fill: 'above' }).options?.shaded).toEqual({
       orientation: 'top',
     });
+  });
+
+  it('compiles fill.below: true (object form) to bottom orientation', () => {
+    expect(compileGroup({ id: 'a', fill: { below: true } }).options?.shaded).toEqual({
+      orientation: 'bottom',
+    });
+  });
+
+  it('compiles fill.above: true (object form) to top orientation', () => {
+    expect(compileGroup({ id: 'a', fill: { above: true } }).options?.shaded).toEqual({
+      orientation: 'top',
+    });
+  });
+
+  it('throws a clear error for fill.below given as a number', () => {
+    expect(() =>
+      compileGroup({ id: 'a', fill: { below: 0 } as unknown as { below: boolean } })
+    ).toThrow(
+      'Group "a"\'s "fill.below" must not be a number: shading is relative to the axis, not an arbitrary value. Use fill: "below" (or fill: { below: true }).'
+    );
+  });
+
+  it('throws a clear error for fill.above given as a number', () => {
+    expect(() =>
+      compileGroup({ id: 'a', fill: { above: 500 } as unknown as { above: boolean } })
+    ).toThrow(
+      'Group "a"\'s "fill.above" must not be a number: shading is relative to the axis, not an arbitrary value. Use fill: "above" (or fill: { above: true }).'
+    );
   });
 
   it('compiles fill.to to a groupId reference', () => {
@@ -186,7 +220,7 @@ describe('compileGroup', () => {
   });
 
   it('accepts a fill object with a recognized key', () => {
-    expect(compileGroup({ id: 'a', fill: { below: 0 } }).options?.shaded).toEqual({
+    expect(compileGroup({ id: 'a', fill: { below: true } }).options?.shaded).toEqual({
       orientation: 'bottom',
     });
   });
@@ -195,7 +229,7 @@ describe('compileGroup', () => {
     expect(() =>
       compileGroup({ id: 'a', fill: { blow: 0 } as unknown as { below: number } })
     ).toThrow(
-      'Group "a" has a "fill" object with no recognized key. Use "to", "below", or "above".'
+      'Group "a"\'s "fill" must have a "to", "below", or "above" key.'
     );
   });
 
@@ -206,7 +240,7 @@ describe('compileGroup', () => {
   it('throws a plain-language error for a non-numeric width', () => {
     expect(() =>
       compileGroup({ id: 'a', width: 'thick' as unknown as number })
-    ).toThrow('Group "a" has a "width" value that is not a number.');
+    ).toThrow('Group "a"\'s "width" must be a number.');
   });
 
   it('accepts a dashes array of numbers', () => {
@@ -218,12 +252,12 @@ describe('compileGroup', () => {
   it('throws a plain-language error for a non-array dashes value', () => {
     expect(() =>
       compileGroup({ id: 'a', dashes: '5,5' as unknown as number[] })
-    ).toThrow('Group "a" has a "dashes" value that is not a list of numbers.');
+    ).toThrow('Group "a"\'s "dashes" must be a list of numbers.');
   });
 
   it('throws a plain-language error for a dashes array with a non-numeric entry', () => {
     expect(() =>
       compileGroup({ id: 'a', dashes: ['a', 'b'] as unknown as number[] })
-    ).toThrow('Group "a" has a "dashes" value with a non-numeric entry.');
+    ).toThrow('Group "a"\'s "dashes" must contain only numbers.');
   });
 });

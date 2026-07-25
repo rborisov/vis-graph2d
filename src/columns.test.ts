@@ -98,7 +98,7 @@ describe('expandColumns', () => {
       expandColumns(
         block({ x: [1, 2], groups: [malformedGroup({ id: 'a', y: 'abc' })] })
       )
-    ).toThrow('Group "a" has a "y" column that is not a list of values.');
+    ).toThrow('Group "a"\'s "y" must be a list of values.');
   });
 
   it('throws when a group y column is a number', () => {
@@ -106,7 +106,7 @@ describe('expandColumns', () => {
       expandColumns(
         block({ x: [1, 2], groups: [malformedGroup({ id: 'a', y: 5 })] })
       )
-    ).toThrow('Group "a" has a "y" column that is not a list of values.');
+    ).toThrow('Group "a"\'s "y" must be a list of values.');
   });
 
   it('throws when a group y column is null', () => {
@@ -114,7 +114,7 @@ describe('expandColumns', () => {
       expandColumns(
         block({ x: [1, 2], groups: [malformedGroup({ id: 'a', y: null })] })
       )
-    ).toThrow('Group "a" has a "y" column that is not a list of values.');
+    ).toThrow('Group "a"\'s "y" must be a list of values.');
   });
 
   it('throws when a group x override is not a list, even with a valid block-level x', () => {
@@ -125,7 +125,7 @@ describe('expandColumns', () => {
           groups: [malformedGroup({ id: 'a', x: 'nope', y: [10, 20] })],
         })
       )
-    ).toThrow('Group "a" has an "x" column that is not a list of values.');
+    ).toThrow('Group "a"\'s "x" must be a list of values.');
   });
 
   it('throws when a group x override is not a list and there is no block-level x', () => {
@@ -135,6 +135,6 @@ describe('expandColumns', () => {
           groups: [malformedGroup({ id: 'a', x: 'nope', y: [10, 20] })],
         })
       )
-    ).toThrow('Group "a" has an "x" column that is not a list of values.');
+    ).toThrow('Group "a"\'s "x" must be a list of values.');
   });
 });
