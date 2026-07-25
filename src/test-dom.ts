@@ -60,7 +60,10 @@ export function stubCreateEl(): void {
       const child = document.createElement(tag);
       const info: DomElementInfo | undefined = typeof o === 'string' ? { cls: o } : o;
       if (info?.cls !== undefined) {
-        const classes = Array.isArray(info.cls) ? info.cls : [info.cls];
+        const clsValues = Array.isArray(info.cls) ? info.cls : [info.cls];
+        // Real Obsidian accepts a space-separated class string per entry
+        // (e.g. cls: 'foo bar'), which classList.add rejects outright.
+        const classes = clsValues.flatMap((cls) => cls.split(/\s+/));
         for (const cls of classes) {
           if (cls !== '') child.classList.add(cls);
         }

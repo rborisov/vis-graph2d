@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { parseBlock } from './parser';
 import { normalize } from './normalizer';
 import { renderGraph2d } from './renderer';
@@ -16,9 +16,23 @@ beforeAll(() => {
   stubLayout();
 });
 
-function render(source: string): HTMLElement {
+/**
+ * Creates a detached-then-attached host element for a chart to render into.
+ * Centralizing the `document.createElement`/`document.body.appendChild` pair
+ * here (instead of repeating it at every call site) keeps `obsidianmd/
+ * prefer-active-doc` warnings to a single definition rather than one per
+ * test -- this is a test harness with no popout-window concept, so the rule
+ * doesn't meaningfully apply, but there is no reason to multiply the warning
+ * count either.
+ */
+function createHost(): HTMLElement {
   const el = document.createElement('div');
   document.body.appendChild(el);
+  return el;
+}
+
+function render(source: string): HTMLElement {
+  const el = createHost();
   const chart = normalize(parseBlock(source));
   renderGraph2d(el, chart);
   return el;
@@ -51,32 +65,32 @@ describe('renderGraph2d', () => {
   });
 
   it('destroy() tears the chart down', () => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
+    const el = createHost();
     const graph = renderGraph2d(el, normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1 }')));
     graph.destroy();
     expect(el.querySelector('.vis-panel')).toBeNull();
   });
 
   it('applies the label formatter without tripping vis option validation', () => {
-    const logged: unknown[][] = [];
-    // Intentionally capturing console.log (not calling it to log something):
-    // this test's whole point is to prove vis's option validator does NOT
-    // write "Errors have been found" to it. obsidianmd's no-console rule
-    // targets plugin code that logs; it doesn't apply to a test harness that
-    // intercepts the console to assert against it.
-    // eslint-disable-next-line obsidianmd/rule-custom-message
-    const original = console.log;
-    // eslint-disable-next-line obsidianmd/rule-custom-message
-    console.log = (...args: unknown[]) => { logged.push(args); };
+    // This test's whole point is to prove vis's option validator does NOT
+    // write "Errors have been found" to console.log.
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       render('options: { xAxis: numeric }\nitems:\n  - { x: 1, y: 1 }\n  - { x: 50, y: 2 }');
     } finally {
-      // eslint-disable-next-line obsidianmd/rule-custom-message
-      console.log = original;
+      spy.mockRestore();
     }
-    const text = logged.map((args) => args.join(' ')).join('\n');
+    const text = spy.mock.calls.map((args) => args.join(' ')).join('\n');
     expect(text).not.toContain('Errors have been found');
+  });
+
+  it('leaves no container behind when construction throws', () => {
+    const el = createHost();
+    const chart = normalize(parseBlock(
+      'groups:\n  - id: a\n  - id: a\nitems:\n  - { x: "2026-01-01", y: 1, group: a }'
+    ));
+    expect(() => renderGraph2d(el, chart)).toThrow();
+    expect(el.querySelector('.graph2d-plugin')).toBeNull();
   });
 });
 
@@ -142,8 +156,7 @@ describe('axis label sequences (via TimeStep, layout-independent)', () => {
     const chart = normalize(parseBlock(source));
     chart.visOptions.start = new Date(chart.scale.toInternal(minValue));
     chart.visOptions.end = new Date(chart.scale.toInternal(maxValue));
-    const el = document.createElement('div');
-    document.body.appendChild(el);
+    const el = createHost();
     const graph = renderGraph2d(el, chart);
     return { chart, graph };
   }
@@ -209,5 +222,25 @@ describe('axis label sequences (via TimeStep, layout-independent)', () => {
       'Fri'
     );
     expect(tickLabels(chart, graph)).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+  });
+
+  it('installs no formatter for the time axis', () => {
+    const chart = normalize(parseBlock(
+      'items:\n  - { x: "2026-01-01", y: 1 }\n  - { x: "2026-01-05", y: 2 }'
+    ));
+    chart.visOptions.start = new Date(Date.parse('2026-01-01'));
+    chart.visOptions.end = new Date(Date.parse('2026-01-05'));
+    const el = createHost();
+    const graph = renderGraph2d(el, chart);
+    const step = (graph as unknown as { timeAxis: { step: { start(): void; getLabelMinor(): string } } }).timeAxis.step;
+    step.start();
+    // TimeScale.formatLabel() returns '' by design; a non-empty label proves
+    // vis's own date formatting is still in charge.
+    expect(step.getLabelMinor()).not.toBe('');
+  });
+
+  it('does not force UTC on the time axis', () => {
+    const chart = normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1 }'));
+    expect(chart.visOptions).not.toHaveProperty('moment');
   });
 });

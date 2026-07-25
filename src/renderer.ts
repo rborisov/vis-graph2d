@@ -34,19 +34,31 @@ export function renderGraph2d(
     ...args: unknown[]
   ) => Graph2dHandle;
 
-  const graph =
-    chart.groups.length > 0
-      ? new Graph2dConstructor(container, chart.items, chart.groups, visOptions)
-      : new Graph2dConstructor(container, chart.items, visOptions);
+  // Guards against a throw during/after construction (e.g. duplicate group
+  // ids) leaving a broken half-built `.vis-timeline` in the note with
+  // main.ts's error box rendered below it. If `graph` never gets assigned,
+  // the throw happened inside the constructor itself and there is no
+  // instance to destroy() -- but the container is still removed either way.
+  let graph: Graph2dHandle | undefined;
+  try {
+    graph =
+      chart.groups.length > 0
+        ? new Graph2dConstructor(container, chart.items, chart.groups, visOptions)
+        : new Graph2dConstructor(container, chart.items, visOptions);
 
-  if (chart.scale.overridesLabels) {
-    applyLabelFormatter(graph, (value: MomentLike) => chart.scale.formatLabel(value));
+    if (chart.scale.overridesLabels) {
+      applyLabelFormatter(graph, (value: MomentLike) => chart.scale.formatLabel(value));
+    }
+
+    // Without this, iOS renders into a zero-size box.
+    window.requestAnimationFrame(() => graph!.redraw());
+
+    return graph;
+  } catch (e) {
+    graph?.destroy();
+    container.remove();
+    throw e;
   }
-
-  // Without this, iOS renders into a zero-size box.
-  window.requestAnimationFrame(() => graph.redraw());
-
-  return graph;
 }
 
 /**
