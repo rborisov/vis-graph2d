@@ -207,6 +207,7 @@ suite (`src/examples.test.ts`) — a broken example fails the build.
 
 | Version | Notes |
 | --- | --- |
+| 0.1.1 | `start`/`end`/`min`/`max`/`zoomMin`/`zoomMax` now work on numeric and category axes; data-file errors name the file; stricter validation of groups and items; unified error wording. |
 | 0.1.0 | Initial release: line/bar/points charts, time/numeric/category axes, inline/columnar/external data, full styling passthrough, PNG export. |
 
 ## License
