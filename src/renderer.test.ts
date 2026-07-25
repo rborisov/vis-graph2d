@@ -86,9 +86,15 @@ describe('renderGraph2d', () => {
 
   it('leaves no container behind when construction throws', () => {
     const el = createHost();
-    const chart = normalize(parseBlock(
-      'groups:\n  - id: a\n  - id: a\nitems:\n  - { x: "2026-01-01", y: 1, group: a }'
-    ));
+    // Built directly rather than through normalize(), which now rejects
+    // duplicate group ids itself. This test guards renderGraph2d's own
+    // cleanup, so it must hand vis input that vis is the one to reject:
+    // duplicate ids make the Graph2d constructor throw from setGroups.
+    const chart = normalize(parseBlock('items:\n  - { x: "2026-01-01", y: 1, group: a }'));
+    chart.groups = [
+      { id: 'a', content: 'A' },
+      { id: 'a', content: 'A again' },
+    ];
     expect(() => renderGraph2d(el, chart)).toThrow();
     expect(el.querySelector('.graph2d-plugin')).toBeNull();
   });
