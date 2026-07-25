@@ -101,10 +101,11 @@ groups:
     expect(() => parseBlock('   ')).toThrow('Block is empty');
   });
 
-  it('ignores a non-array groups value', () => {
+  it('throws when groups is not a list, even though items satisfies content', () => {
     const source = 'groups: "invalid"\nitems: []';
-    const result = parseBlock(source);
-    expect(result.groups).toBeUndefined();
+    expect(() => parseBlock(source)).toThrow(
+      'Block "groups" must be a list of series.'
+    );
   });
 
   it('filters out null entries in the groups array', () => {
@@ -122,25 +123,25 @@ groups:
 
   it('throws when groups holds a non-array value and there is no other data source', () => {
     expect(() => parseBlock('groups: "invalid"')).toThrow(
-      'must have "items", "data", or columnar "x"/"y" arrays'
+      'Block "groups" must be a list of series.'
     );
   });
 
   it('throws when items holds a non-array value and there is no other data source', () => {
     expect(() => parseBlock('items: "invalid"')).toThrow(
-      'must have "items", "data", or columnar "x"/"y" arrays'
+      'Block "items" must be a list of data points.'
     );
   });
 
   it('throws when x holds a non-array value and there is no other data source', () => {
     expect(() => parseBlock('x: "invalid"')).toThrow(
-      'must have "items", "data", or columnar "x"/"y" arrays'
+      'Block "x" must be a list of values.'
     );
   });
 
   it('throws when data holds a non-string value and there is no other data source', () => {
     expect(() => parseBlock('data: 123')).toThrow(
-      'must have "items", "data", or columnar "x"/"y" arrays'
+      'Block "data" must be a file path string.'
     );
   });
 
@@ -163,5 +164,74 @@ groups:
     const source = 'items:\n  - { x: 1, y: 2 }\n  - just a string';
     const result = parseBlock(source);
     expect(result.items).toHaveLength(1);
+  });
+
+  describe('strict type validation', () => {
+    it('throws when "items" is present but not an array, even with another valid data source', () => {
+      expect(() => parseBlock('items: "invalid"\ndata: file.csv')).toThrow(
+        'Block "items" must be a list of data points.'
+      );
+    });
+
+    it('throws when "groups" is present but not an array, even with another valid data source', () => {
+      expect(() => parseBlock('groups: "invalid"\ndata: file.csv')).toThrow(
+        'Block "groups" must be a list of series.'
+      );
+    });
+
+    it('throws when "x" is present but not an array, even with another valid data source', () => {
+      expect(() => parseBlock('x: "invalid"\ndata: file.csv')).toThrow(
+        'Block "x" must be a list of values.'
+      );
+    });
+
+    it('throws when "data" is present but not a string, even with another valid data source', () => {
+      const source = 'data: 123\nitems:\n  - { x: 1, y: 2 }';
+      expect(() => parseBlock(source)).toThrow(
+        'Block "data" must be a file path string.'
+      );
+    });
+
+    it('throws when "options" is present but not a non-null object, even with another valid data source', () => {
+      expect(() => parseBlock('options: null\ndata: file.csv')).toThrow(
+        'Block "options" must be a settings object.'
+      );
+    });
+
+    it('does not throw when optional keys are simply absent', () => {
+      expect(() => parseBlock('data: file.csv')).not.toThrow();
+    });
+  });
+
+  describe('group-level "data" must be a string (Finding 1)', () => {
+    it('does not treat a numeric group "data" as valid content', () => {
+      const source = 'groups:\n  - id: a\n    data: 123';
+      expect(() => parseBlock(source)).toThrow(
+        'must have "items", "data", or columnar "x"/"y" arrays'
+      );
+    });
+
+    it('does not treat a null group "data" as valid content', () => {
+      const source = 'groups:\n  - id: a\n    data: null';
+      expect(() => parseBlock(source)).toThrow(
+        'must have "items", "data", or columnar "x"/"y" arrays'
+      );
+    });
+  });
+
+  describe('malformed fields are not silently dropped when "items: []" is present (Finding 2)', () => {
+    it('throws for a non-string block "data" even though "items" is an explicit empty array', () => {
+      const source = 'items: []\ndata: 123';
+      expect(() => parseBlock(source)).toThrow(
+        'Block "data" must be a file path string.'
+      );
+    });
+
+    it('throws for a non-array "groups" even though "items" is an explicit empty array', () => {
+      const source = 'items: []\ngroups: "invalid"';
+      expect(() => parseBlock(source)).toThrow(
+        'Block "groups" must be a list of series.'
+      );
+    });
   });
 });

@@ -23,6 +23,29 @@ export function parseBlock(source: string): RawBlock {
 
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
+
+    // Strict parsing: a key that is present but holds the wrong type is a
+    // user mistake and must render an inline error, never be silently
+    // dropped. Keys that are absent entirely are fine and skip these checks.
+    if (obj.items !== undefined && !Array.isArray(obj.items)) {
+      throw new Error('Block "items" must be a list of data points.');
+    }
+    if (obj.groups !== undefined && !Array.isArray(obj.groups)) {
+      throw new Error('Block "groups" must be a list of series.');
+    }
+    if (obj.x !== undefined && !Array.isArray(obj.x)) {
+      throw new Error('Block "x" must be a list of values.');
+    }
+    if (obj.data !== undefined && typeof obj.data !== 'string') {
+      throw new Error('Block "data" must be a file path string.');
+    }
+    if (
+      obj.options !== undefined &&
+      !(typeof obj.options === 'object' && obj.options !== null)
+    ) {
+      throw new Error('Block "options" must be a settings object.');
+    }
+
     const groups = Array.isArray(obj.groups)
       ? (obj.groups as unknown[]).filter(isObject).map((g) => g as RawGroup)
       : undefined;
@@ -37,7 +60,7 @@ export function parseBlock(source: string): RawBlock {
     // supported data shapes: items, a data file reference, columnar x/y, or
     // a group that itself carries data or y values.
     const hasGroupData =
-      groups?.some((g) => g.data !== undefined || Array.isArray(g.y)) ??
+      groups?.some((g) => typeof g.data === 'string' || Array.isArray(g.y)) ??
       false;
 
     if (!itemsProvided && data === undefined && x === undefined && !hasGroupData) {
