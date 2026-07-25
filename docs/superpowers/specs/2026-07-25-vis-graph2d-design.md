@@ -113,17 +113,17 @@ options:
 groups:
   - id: rev
     content: Revenue
+    type: line              # friendly name for the graph type
     color: "#e11d48"
     fill: true
     width: 2
     dashes: [5, 5]
-    style: line
     yAxisOrientation: left
     interpolation: centripetal
-    drawPoints: { style: circle, size: 6 }
+    points: { style: circle, size: 6 }
   - id: units
     content: Units
-    style: bar
+    type: bar
     barChart: { sideBySide: true, align: center }
 items:
   - { x: 1, y: 20, group: rev }
@@ -161,8 +161,19 @@ friendly fields are additive sugar, never a whitelist.
 
 ### Friendly field compilation (`series.ts`)
 
+**Naming note — the `style` collision.** vis overloads the word: at *block*
+level `options.style` selects the default graph type (`'line'`, `'bar'`,
+`'points'`), but on a *group* `style` is an inline CSS string and the graph type
+lives at `group.options.style`. To keep both meanings reachable without
+ambiguity, the plugin reserves group-level `style:` for raw CSS pass-through and
+introduces `type:` as the friendly name for a group's graph type. Block-level
+`options.style` keeps vis's meaning (default graph type) unchanged. Each
+friendly field below has exactly one spelling; the raw vis name for the same
+concept is always still reachable via `options:` on the group.
+
 | Friendly field | Compiles to |
 | --- | --- |
+| `type: line \| bar \| points` | `options.style: <value>` |
 | `color: "#e11d48"` | `style: "stroke:#e11d48;fill:#e11d48;"` |
 | `width: 2` | `stroke-width:2` in the style string |
 | `dashes: [5, 5]` | `stroke-dasharray:5 5` in the style string |
@@ -173,6 +184,11 @@ friendly fields are additive sugar, never a whitelist.
 | `interpolation: false` | `options.interpolation: { enabled: false }` |
 | `points: false` | `options.drawPoints: false` |
 | `points: { style, size }` | `options.drawPoints: { enabled: true, ... }` |
+
+The CSS `fill` emitted by `color` governs point and bar fill. Shaded-area fill
+is a separate concern controlled by `fill:` → `options.shaded`; the shaded
+region inherits the group's color through its generated class, so a single
+`color` value styles stroke, points, and shading consistently.
 
 **Precedence is explicit:** a raw `style:`, `options:`, or `className:` on a
 group overrides anything compiled from friendly fields. Nothing the plugin
@@ -235,7 +251,8 @@ required:
   formatting, step selection across a spread of data ranges
 - `columns.test.ts` — columnar expansion, per-group `x` override, ragged arrays
 - `series.test.ts` — friendly→vis compilation for every field in the table
-  above, and that raw `style`/`options`/`className` win on conflict
+  above; that raw `style`/`options`/`className` win on conflict; and that
+  group-level `style:` is never interpreted as a graph type
 - `data-source.test.ts` — CSV, JSON, and YAML parsing against a mocked vault,
   including missing-file and malformed-content paths
 - `normalizer.test.ts` — end-to-end block source → vis datasets
