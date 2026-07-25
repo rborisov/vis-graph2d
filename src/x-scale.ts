@@ -1,9 +1,18 @@
 import type { XAxisMode } from './types';
+import { moment } from 'vis-timeline/standalone';
 
 export const MS_PER_DAY = 86400000;
 
 /** Number of axis labels to aim for when choosing a step. */
-const TARGET_LABEL_COUNT = 8;
+const TARGET_LABEL_COUNT = 10;
+
+/**
+ * vis's own moment instance, pinned to UTC. Passed as the `moment` axis
+ * option so vis's TimeStep computes ticks in UTC instead of the reader's
+ * local timezone, which would otherwise displace every numeric/category
+ * label by the UTC offset.
+ */
+const UTC_MOMENT = (date: Date) => moment(date).utc();
 
 /**
  * Anything carrying an epoch-millisecond value. vis calls label formatters
@@ -67,37 +76,52 @@ class TimeScale implements XScale {
   }
 }
 
+/** The 1/2/5 x 10^k step nearest span/10, so labels land on round values. */
+export function chooseNiceStep(span: number): number {
+  if (!(span > 0) || !Number.isFinite(span)) return 1;
+  const raw = span / TARGET_LABEL_COUNT;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+  const normalized = raw / magnitude;
+  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return factor * magnitude;
+}
+
 class NumericScale implements XScale {
   readonly overridesLabels = true;
-  private readonly unitMs: number;
-  private readonly stepDays: number;
+  private readonly step: number; // in author units
+  private readonly anchor: number; // author value at internal time 0
 
   constructor(values: unknown[]) {
-    const numbers = values.map((v) => toNumber(v)).filter((n) => n !== undefined);
-    const span = numbers.length > 0 ? Math.max(...numbers) - Math.min(...numbers) : 0;
-    this.unitMs = chooseUnitMs(span);
-    const internalDays = (span * this.unitMs) / MS_PER_DAY;
-    this.stepDays = chooseStep(internalDays);
+    const numbers = values
+      .map((v) => toNumber(v))
+      .filter((n) => n !== undefined);
+    const min = numbers.length > 0 ? Math.min(...numbers) : 0;
+    const max = numbers.length > 0 ? Math.max(...numbers) : 0;
+    this.step = chooseNiceStep(max - min);
+    // Anchoring on a multiple of the step is what makes every tick land on a
+    // round number even when the data does not start at one.
+    this.anchor = Math.floor(min / this.step) * this.step;
   }
 
   toInternal(value: unknown): number {
     const n = toNumber(value);
     if (n === undefined) throw new Error(`"${String(value)}" is not a number.`);
-    return n * this.unitMs;
+    return ((n - this.anchor) / this.step) * MS_PER_DAY;
   }
 
-  formatLabel(value_: MomentLike): string {
-    const value = value_.valueOf() / this.unitMs;
-    // Float multiplication then division reintroduces tiny errors (0.25
-    // can come back as 0.2500000000000001). 12 significant digits is far
-    // more precision than any axis label needs and removes the noise.
-    return String(Number(value.toPrecision(12)));
+  formatLabel(value: MomentLike): string {
+    const slots = value.valueOf() / MS_PER_DAY;
+    const authorValue = this.anchor + slots * this.step;
+    // Float division then multiplication reintroduces tiny errors; 12
+    // significant digits is more precision than any axis label needs.
+    return String(Number(authorValue.toPrecision(12)));
   }
 
   axisHints(): Record<string, unknown> {
     return {
       showMajorLabels: false,
-      timeAxis: { scale: 'day', step: this.stepDays },
+      timeAxis: { scale: 'day', step: 1 },
+      moment: UTC_MOMENT,
     };
   }
 }
@@ -135,6 +159,7 @@ class CategoryScale implements XScale {
     return {
       showMajorLabels: false,
       timeAxis: { scale: 'day', step: 1 },
+      moment: UTC_MOMENT,
     };
   }
 }
@@ -146,26 +171,4 @@ function toNumber(value: unknown): number | undefined {
     if (Number.isFinite(n)) return n;
   }
   return undefined;
-}
-
-/**
- * Picks a power-of-ten multiplier so the data span maps to roughly 10-1000
- * internal days. vis chooses its axis scale from the visible range, and only
- * a day-scale range in that band yields round-numbered step sizes for both
- * x: [0, 1] and x: [0, 1000000].
- */
-export function chooseUnitMs(span: number): number {
-  if (span <= 0) return MS_PER_DAY;
-  const exponent = Math.round(2 - Math.log10(span));
-  return MS_PER_DAY * Math.pow(10, exponent);
-}
-
-/** Rounds up to the nearest 1/2/5 x 10^k so labels land on round values. */
-function chooseStep(internalDays: number): number {
-  if (!Number.isFinite(internalDays) || internalDays <= 0) return 1;
-  const raw = internalDays / TARGET_LABEL_COUNT;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
-  const normalized = raw / magnitude;
-  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-  return Math.max(1, Math.round(factor * magnitude));
 }

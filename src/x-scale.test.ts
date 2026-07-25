@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createXScale, MS_PER_DAY } from './x-scale';
+import { createXScale, chooseNiceStep, MS_PER_DAY } from './x-scale';
+
+// The valid JS Date range is +/- 8.64e15ms from the epoch.
+const MAX_VALID_DATE_MS = 8.64e15;
 
 describe('time scale', () => {
   it('passes ISO date strings through to epoch ms', () => {
@@ -18,10 +21,12 @@ describe('time scale', () => {
     expect(scale.toInternal(1700000000000)).toBe(1700000000000);
   });
 
-  it('does not override axis labels', () => {
+  it('does not override axis labels and forces no timezone', () => {
     const scale = createXScale('time', ['2026-01-01']);
     expect(scale.overridesLabels).toBe(false);
-    expect(scale.axisHints()).toEqual({});
+    const hints = scale.axisHints();
+    expect(hints).toEqual({});
+    expect('moment' in hints).toBe(false);
   });
 
   it('throws for an unparseable date', () => {
@@ -30,65 +35,161 @@ describe('time scale', () => {
   });
 });
 
-describe('numeric scale', () => {
-  it('round-trips whole numbers', () => {
-    const scale = createXScale('numeric', [0, 50, 100]);
-    for (const n of [0, 1, 50, 99, 100]) {
-      expect(scale.formatLabel(new Date(scale.toInternal(n)))).toBe(String(n));
-    }
+describe('chooseNiceStep', () => {
+  it('returns exact 1/2/5/10 boundary steps at the ones magnitude', () => {
+    expect(chooseNiceStep(10)).toBe(1);
+    expect(chooseNiceStep(20)).toBe(2);
+    expect(chooseNiceStep(50)).toBe(5);
   });
 
-  it('round-trips fractional values in a sub-unit range', () => {
-    const scale = createXScale('numeric', [0, 0.5, 1]);
+  it('returns exact 1/2/5 boundary steps at the tens magnitude', () => {
+    expect(chooseNiceStep(100)).toBe(10);
+    expect(chooseNiceStep(200)).toBe(20);
+    expect(chooseNiceStep(500)).toBe(50);
+    expect(chooseNiceStep(1000)).toBe(100);
+  });
+
+  it('returns 1 for a zero or negative span', () => {
+    expect(chooseNiceStep(0)).toBe(1);
+    expect(chooseNiceStep(-5)).toBe(1);
+  });
+
+  it('returns 1 for a non-finite span', () => {
+    expect(chooseNiceStep(Infinity)).toBe(1);
+    expect(chooseNiceStep(NaN)).toBe(1);
+  });
+});
+
+describe('numeric scale', () => {
+  it('round-trips a span of 100 through toInternal/formatLabel with exact labels', () => {
+    const scale = createXScale('numeric', [0, 100]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(1)))).toBe('1');
+    expect(scale.formatLabel(new Date(scale.toInternal(50)))).toBe('50');
+    expect(scale.formatLabel(new Date(scale.toInternal(99)))).toBe('99');
+    expect(scale.formatLabel(new Date(scale.toInternal(100)))).toBe('100');
+  });
+
+  it('round-trips a tiny span of 0.001', () => {
+    const scale = createXScale('numeric', [0, 0.001]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(0.0005)))).toBe('0.0005');
+    expect(scale.formatLabel(new Date(scale.toInternal(0.001)))).toBe('0.001');
+  });
+
+  it('round-trips a span of 0.5', () => {
+    const scale = createXScale('numeric', [0, 0.5]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(0.25)))).toBe('0.25');
+    expect(scale.formatLabel(new Date(scale.toInternal(0.5)))).toBe('0.5');
+  });
+
+  it('round-trips a span of 1', () => {
+    const scale = createXScale('numeric', [0, 1]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
     expect(scale.formatLabel(new Date(scale.toInternal(0.25)))).toBe('0.25');
     expect(scale.formatLabel(new Date(scale.toInternal(1)))).toBe('1');
   });
 
-  it('round-trips very large values', () => {
+  it('round-trips a span of 7', () => {
+    const scale = createXScale('numeric', [0, 7]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(3)))).toBe('3');
+    expect(scale.formatLabel(new Date(scale.toInternal(7)))).toBe('7');
+  });
+
+  it('round-trips a span of 12345', () => {
+    const scale = createXScale('numeric', [0, 12345]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(2000)))).toBe('2000');
+    expect(scale.formatLabel(new Date(scale.toInternal(12345)))).toBe('12345');
+  });
+
+  it('round-trips a span of 1e6', () => {
     const scale = createXScale('numeric', [0, 1000000]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
     expect(scale.formatLabel(new Date(scale.toInternal(750000)))).toBe('750000');
+    expect(scale.formatLabel(new Date(scale.toInternal(1000000)))).toBe('1000000');
   });
 
-  it('round-trips negative values', () => {
+  it('round-trips a span of 1e9', () => {
+    const scale = createXScale('numeric', [0, 1e9]);
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(5e8)))).toBe('500000000');
+    expect(scale.formatLabel(new Date(scale.toInternal(1e9)))).toBe('1000000000');
+  });
+
+  it('round-trips a range spanning zero', () => {
     const scale = createXScale('numeric', [-100, 100]);
+    expect(scale.formatLabel(new Date(scale.toInternal(-100)))).toBe('-100');
     expect(scale.formatLabel(new Date(scale.toInternal(-40)))).toBe('-40');
+    expect(scale.formatLabel(new Date(scale.toInternal(0)))).toBe('0');
+    expect(scale.formatLabel(new Date(scale.toInternal(100)))).toBe('100');
   });
 
-  it('accepts numeric strings', () => {
-    const scale = createXScale('numeric', [0, 10]);
-    expect(scale.toInternal('5')).toBe(scale.toInternal(5));
+  it('round-trips realistic Unix-seconds input without overflowing Date', () => {
+    const scale = createXScale('numeric', [1700000000, 1700000010]);
+    expect(scale.formatLabel(new Date(scale.toInternal(1700000000)))).toBe('1700000000');
+    expect(scale.formatLabel(new Date(scale.toInternal(1700000005)))).toBe('1700000005');
+    expect(scale.formatLabel(new Date(scale.toInternal(1700000010)))).toBe('1700000010');
   });
 
-  it('maps the data span onto 10-1000 internal days for any magnitude', () => {
-    for (const span of [0.01, 1, 100, 12345, 1e6]) {
-      const scale = createXScale('numeric', [0, span]);
-      const days = (scale.toInternal(span) - scale.toInternal(0)) / MS_PER_DAY;
-      expect(days).toBeGreaterThanOrEqual(10);
-      expect(days).toBeLessThanOrEqual(1000);
+  it('keeps toInternal within the valid Date range for every tested span', () => {
+    const cases: Array<[unknown[], number]> = [
+      [[0, 100], 100],
+      [[0, 0.001], 0.001],
+      [[0, 0.5], 0.5],
+      [[0, 1], 1],
+      [[0, 7], 7],
+      [[0, 12345], 12345],
+      [[0, 1000000], 1000000],
+      [[0, 1e9], 1e9],
+      [[-100, 100], 100],
+      [[1700000000, 1700000010], 1700000010],
+    ];
+    for (const [values, probe] of cases) {
+      const scale = createXScale('numeric', values);
+      for (const v of values as number[]) {
+        expect(Math.abs(scale.toInternal(v))).toBeLessThan(MAX_VALID_DATE_MS);
+      }
+      expect(Math.abs(scale.toInternal(probe))).toBeLessThan(MAX_VALID_DATE_MS);
     }
   });
 
-  it('pins a day-scale step and hides major labels', () => {
-    const hints = createXScale('numeric', [0, 100]).axisHints();
-    expect(hints.showMajorLabels).toBe(false);
-    expect((hints.timeAxis as { scale: string }).scale).toBe('day');
-    expect((hints.timeAxis as { step: number }).step).toBeGreaterThanOrEqual(1);
-  });
-
-  it('chooses a step that yields a readable number of labels', () => {
-    const hints = createXScale('numeric', [0, 100]).axisHints();
-    const step = (hints.timeAxis as { step: number }).step;
-    const scale = createXScale('numeric', [0, 100]);
-    const totalDays = (scale.toInternal(100) - scale.toInternal(0)) / MS_PER_DAY;
-    const labelCount = totalDays / step;
-    expect(labelCount).toBeGreaterThanOrEqual(4);
-    expect(labelCount).toBeLessThanOrEqual(20);
+  it('anchors on a multiple of the chosen step that is <= min', () => {
+    const scale = createXScale('numeric', [37, 137]);
+    // chooseNiceStep(137 - 37) === chooseNiceStep(100) === 10.
+    expect(chooseNiceStep(100)).toBe(10);
+    // anchor = floor(37 / 10) * 10 = 30, which is a multiple of 10 and <= 37.
+    const anchor = Number(scale.formatLabel(new Date(0)));
+    expect(anchor).toBe(30);
+    expect(anchor % 10).toBe(0);
+    expect(anchor).toBeLessThanOrEqual(37);
+    // Every tick (one per internal day) lands on a multiple of the step.
+    for (const days of [0, 1, 2, 3, 10]) {
+      const tick = Number(scale.formatLabel(new Date(days * MS_PER_DAY)));
+      expect(tick % 10).toBe(0);
+    }
   });
 
   it('handles a zero-width span without dividing by zero', () => {
     const scale = createXScale('numeric', [5, 5]);
     expect(Number.isFinite(scale.toInternal(5))).toBe(true);
-    expect((scale.axisHints().timeAxis as { step: number }).step).toBe(1);
+    expect(scale.toInternal(5)).toBe(0);
+    expect(scale.formatLabel(new Date(0))).toBe('5');
+  });
+
+  it('handles single-point data without dividing by zero', () => {
+    const scale = createXScale('numeric', [42]);
+    expect(Number.isFinite(scale.toInternal(42))).toBe(true);
+    expect(scale.formatLabel(new Date(scale.toInternal(42)))).toBe('42');
+  });
+
+  it('pins a one-day step, forces UTC, and hides major labels', () => {
+    const hints = createXScale('numeric', [0, 100]).axisHints();
+    expect(hints.showMajorLabels).toBe(false);
+    expect(hints.timeAxis).toEqual({ scale: 'day', step: 1 });
+    expect(typeof hints.moment).toBe('function');
   });
 
   it('overrides axis labels', () => {
@@ -102,6 +203,11 @@ describe('numeric scale', () => {
     const scale = createXScale('numeric', [0, 100]);
     const momentLike = { valueOf: () => scale.toInternal(42) };
     expect(scale.formatLabel(momentLike)).toBe('42');
+  });
+
+  it('accepts numeric strings', () => {
+    const scale = createXScale('numeric', [0, 10]);
+    expect(scale.toInternal('5')).toBe(scale.toInternal(5));
   });
 
   it('throws for a non-numeric value', () => {
@@ -145,10 +251,11 @@ describe('category scale', () => {
     expect(() => scale.toInternal('Sun')).toThrow('unknown category "Sun"');
   });
 
-  it('pins a step of one day and hides major labels', () => {
+  it('pins a step of one day, forces UTC, and hides major labels', () => {
     const hints = createXScale('category', ['Mon', 'Tue']).axisHints();
     expect(hints.showMajorLabels).toBe(false);
     expect(hints.timeAxis).toEqual({ scale: 'day', step: 1 });
+    expect(typeof hints.moment).toBe('function');
   });
 
   it('overrides axis labels', () => {
