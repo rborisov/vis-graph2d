@@ -74,6 +74,8 @@ export function normalize(
     }
   }
 
+  completeWindow(visOptions, items);
+
   const chart: NormalizedChart = { items, groups, visOptions, scale };
   if (options.height !== undefined) chart.height = options.height;
   return chart;
@@ -129,6 +131,43 @@ function toDate(
     const detail = e instanceof Error ? e.message : String(e);
     throw new Error(`Item ${index} has an invalid "${field}" value: ${detail}`);
   }
+}
+
+/**
+ * Fills in whichever of `start`/`end` the author left out.
+ *
+ * Graph2d's initial-fit path does this itself — but by calling
+ * `me.getItemRange()`, which exists only on Timeline, not on Graph2d (Graph2d
+ * spells it `getDataRange`). So supplying exactly one bound crashes the widget
+ * with `me.getItemRange is not a function`. Supplying both keeps vis out of
+ * that branch entirely. The value used matches what vis intended there: the
+ * data's own min/max.
+ *
+ * With no items there is no range to derive, so the option is left alone
+ * rather than invented.
+ */
+function completeWindow(visOptions: Record<string, unknown>, items: VisPoint[]): void {
+  const hasStart = visOptions.start !== undefined;
+  const hasEnd = visOptions.end !== undefined;
+  if (hasStart === hasEnd || items.length === 0) return;
+
+  let min = Infinity;
+  let max = -Infinity;
+  for (const item of items) {
+    const start = item.x.getTime();
+    if (start < min) min = start;
+    if (start > max) max = start;
+    // A spanning bar reaches past its own x, so it widens the range.
+    const end = item.end?.getTime();
+    if (end !== undefined) {
+      if (end < min) min = end;
+      if (end > max) max = end;
+    }
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+
+  if (hasStart) visOptions.end = new Date(max);
+  else visOptions.start = new Date(min);
 }
 
 /** Maps a `start`/`end`/`min`/`max` block option through the axis scale. */

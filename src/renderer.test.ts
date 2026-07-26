@@ -116,6 +116,49 @@ describe('renderGraph2d', () => {
     expect(text).not.toContain('Errors have been found');
   });
 
+  // Graph2d's own initial-fit path calls me.getItemRange(), which exists only
+  // on Timeline -- so supplying exactly one of start/end used to crash the
+  // widget with "me.getItemRange is not a function". normalize() now fills in
+  // the missing bound from the data so vis never enters that branch.
+  it.each([
+    ['start only, numeric', 'options: { xAxis: numeric, start: 2 }\nitems:\n  - { x: 1, y: 1 }\n  - { x: 9, y: 5 }'],
+    ['end only, numeric', 'options: { xAxis: numeric, end: 5 }\nitems:\n  - { x: 1, y: 1 }\n  - { x: 9, y: 5 }'],
+    ['start only, time', 'options: { start: "2026-02-01" }\nitems:\n  - { x: "2026-01-01", y: 1 }\n  - { x: "2026-03-01", y: 5 }'],
+    ['end only, time', 'options: { end: "2026-02-01" }\nitems:\n  - { x: "2026-01-01", y: 1 }\n  - { x: "2026-03-01", y: 5 }'],
+    ['start only, category', 'options: { xAxis: category, start: Tue }\nitems:\n  - { x: Mon, y: 1 }\n  - { x: Tue, y: 2 }\n  - { x: Wed, y: 3 }'],
+    ['start only, spanning bars', 'options: { xAxis: numeric, start: 1 }\nitems:\n  - { x: 1, y: 1, end: 4 }\n  - { x: 6, y: 2, end: 9 }'],
+  ])('renders with %s', (_name, source) => {
+    const el = createHost();
+    const chart = normalize(parseBlock(source));
+    expect(() => renderGraph2d(el, chart)).not.toThrow();
+    expect(el.querySelector('.vis-panel')).not.toBeNull();
+  });
+
+  it('fills the missing bound from the data range', () => {
+    const chart = normalize(parseBlock(
+      'options: { xAxis: numeric, start: 2 }\nitems:\n  - { x: 1, y: 1 }\n  - { x: 9, y: 5 }'
+    ));
+    // end was absent; it must now equal the largest x in the data.
+    expect(chart.visOptions.end).toBeInstanceOf(Date);
+    expect((chart.visOptions.end as Date).getTime()).toBe(
+      Math.max(...chart.items.map((i) => i.x.getTime()))
+    );
+  });
+
+  it('leaves both bounds alone when the author supplied both', () => {
+    const chart = normalize(parseBlock(
+      'options: { xAxis: numeric, start: 2, end: 6 }\nitems:\n  - { x: 1, y: 1 }\n  - { x: 9, y: 5 }'
+    ));
+    const span = (chart.visOptions.end as Date).getTime() - (chart.visOptions.start as Date).getTime();
+    const full = Math.max(...chart.items.map((i) => i.x.getTime())) - Math.min(...chart.items.map((i) => i.x.getTime()));
+    expect(span).toBeLessThan(full);
+  });
+
+  it('does not invent a bound when there are no items to derive one from', () => {
+    const chart = normalize(parseBlock('options: { xAxis: numeric, start: 2 }\nitems: []'));
+    expect(chart.visOptions.end).toBeUndefined();
+  });
+
   it('destroy() is idempotent', () => {
     // vis's own destroy() throws on a second call ("Cannot read properties
     // of null"). Callers cannot always tell whether it already ran: on the

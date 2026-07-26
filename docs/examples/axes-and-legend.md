@@ -379,6 +379,37 @@ items:
   - { x: 10, y: 11, group: a }
 ```
 
+## Custom initial range: only one bound
+
+Either bound may be given on its own. The other is filled in from the data,
+so `start: 5` means "from 5 to the end of the data".
+
+```vis-graph2d
+options:
+  xAxis: numeric
+  start: 5
+groups:
+  - id: a
+    content: A
+items:
+  - { x: 1, y: 4, group: a }
+  - { x: 2, y: 7, group: a }
+  - { x: 5, y: 9, group: a }
+  - { x: 8, y: 6, group: a }
+  - { x: 10, y: 11, group: a }
+```
+
+The same holds on a time axis with only `end`.
+
+```vis-graph2d
+options:
+  end: "2026-02-15"
+items:
+  - { x: "2026-01-01", y: 10 }
+  - { x: "2026-02-01", y: 14 }
+  - { x: "2026-03-01", y: 9 }
+```
+
 ## Custom initial range: category
 
 ```vis-graph2d

@@ -1,6 +1,6 @@
 {
 	"name": "vis-graph2d",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Render interactive 2D charts in notes. Line, bar, and scatter graphs with YAML or JSON authoring, time/numeric/category axes, and full vis Graph2d styling.",
 	"main": "main.js",
 	"type": "module",

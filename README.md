@@ -71,7 +71,7 @@ without the plugin knowing about them.
 | `zoomable` | `boolean` | Allow the user to zoom the chart. |
 | `moveable` | `boolean` | Allow the user to pan the chart. |
 | `zoomKey` | `string` | Modifier key (e.g. `"ctrlKey"`) required to zoom with the scroll wheel. |
-| `start` / `end` | axis value | Initial visible range, in your data's own units on every axis mode (numeric/category values are mapped onto Graph2d's internal range for you). See `docs/examples/axes-and-legend.md`. |
+| `start` / `end` | axis value | Initial visible range, in your data's own units on every axis mode (numeric/category values are mapped onto Graph2d's internal range for you). Either may be given alone; the other is filled in from the data. See `docs/examples/axes-and-legend.md`. |
 | `min` / `max` | axis value | Bounds beyond which the user cannot pan or zoom. Same unit handling as `start`/`end`. |
 | `zoomMin` / `zoomMax` | number | Tightest/widest allowed zoom, as a **duration** rather than a position. On `numeric`/`category` axes this is also in your own data's units (e.g. `zoomMin: 2` means "never zoom in past a 2-unit-wide window"), converted internally the same way `start`/`end` are. |
 | `dataAxis` | object | Left/right axis titles, ranges, `alignZeros`, `icons`. |
@@ -207,6 +207,7 @@ suite (`src/examples.test.ts`) — a broken example fails the build.
 
 | Version | Notes |
 | --- | --- |
+| 0.1.3 | Fixed `me.getItemRange is not a function` when only one of `start`/`end` was set — the missing bound is now filled in from the data. |
 | 0.1.2 | Fixed the x-axis being invisible on every chart: the container was pinned to the same height as the plot area, leaving no room for the axis strip below it. `height` now documents as the plotting-area height. |
 | 0.1.1 | `start`/`end`/`min`/`max`/`zoomMin`/`zoomMax` now work on numeric and category axes; data-file errors name the file; stricter validation of groups and items; unified error wording. |
 | 0.1.0 | Initial release: line/bar/points charts, time/numeric/category axes, inline/columnar/external data, full styling passthrough, PNG export. |
